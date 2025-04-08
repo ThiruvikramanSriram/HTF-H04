@@ -1,0 +1,58 @@
+# Configuration for Healthcare Demand Forecasting
+
+input:
+  data_path: 'D:\Medsetra\usa.csv'  # Path to the input CSV data file
+
+data:
+  train_test_split: 0.8  # Proportion of data to use for training
+  look_back: 7            # Number of previous days to consider for LSTM
+
+models:
+  enabled_models:         # List of models to enable for forecasting
+    - sarima
+    - lstm
+    - rf
+    - xgboost
+    - prophet
+    - var
+    - hybrid
+  sarima:
+    order: [1, 1, 1]                # SARIMA order (p, d, q)
+    seasonal_order: [1, 1, 1, 7]    # Seasonal order (P, D, Q, s)
+  lstm:
+    units: [32, 16]                  # Number of LSTM units in layers
+    dropout: 0.2                     # Dropout rate for regularization
+    learning_rate: 0.001             # Learning rate for optimizer
+    epochs: 50                       # Number of training epochs
+    batch_size: 16                   # Batch size for training
+  rf:
+    n_estimators: 100                # Number of trees in Random Forest
+    max_depth: 10                    # Maximum depth of trees
+  xgboost:
+    n_estimators: 100                # Number of trees in XGBoost
+    learning_rate: 0.1               # Learning rate for XGBoost
+    max_depth: 5                     # Maximum depth of trees
+  prophet:
+    changepoint_prior_scale: 0.05    # Changepoint prior scale for Prophet
+    seasonality_mode: 'multiplicative' # Seasonality mode for Prophet
+
+hybrid:
+  weight_strategy: 'adaptive'  # Weighting strategy for hybrid model ('equal' or 'adaptive')
+
+forecast:
+  future_days: 30                # Number of days to forecast into the future
+  confidence_interval: 0.95      # Confidence interval for forecasts
+
+alert:
+  threshold_stdev: 1.5           # Standard deviation threshold for alerts
+
+evaluation:
+  use_time_series_cv: true        # Whether to use time series cross-validation
+  time_series_cv_splits: 5        # Number of splits for time series cross-validation
+
+output:
+  save_models: true               # Whether to save trained models
+  model_dir: 'saved_models'       # Directory to save models
+  fig_dir: 'figures'              # Directory to save figures
+  report_file: 'healthcare_forecast_report.md' # Report file name
+  output_dir: 'output'            # Directory to save output files
