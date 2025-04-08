@@ -43,7 +43,7 @@
             padding: 0 20px;
         }
         
-        /* Header Styles */
+        
         header {
             background-color: var(--primary);
             color: white;
@@ -69,7 +69,7 @@
             font-size: 1.75rem;
         }
         
-        /* Main Content Styles */
+      
         main {
             padding: 2rem 0;
         }
@@ -95,7 +95,7 @@
             color: var(--primary-dark);
         }
         
-        /* Form Styles */
+        
         .form-group {
             margin-bottom: 1rem;
         }
@@ -143,7 +143,7 @@
             cursor: not-allowed;
         }
         
-        /* Dashboard Styles */
+        
         .dashboard {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
@@ -191,7 +191,7 @@
             font-weight: 500;
         }
         
-        /* Loading Spinner */
+        
         .loading {
             display: none;
             text-align: center;
@@ -212,7 +212,7 @@
             to { transform: rotate(360deg); }
         }
         
-        /* Alert Styles */
+        
         .alert {
             padding: 1rem;
             border-radius: 4px;
@@ -226,7 +226,7 @@
             border: 1px solid #f87171;
         }
         
-        /* Responsive Styles */
+        
         @media (max-width: 768px) {
             .dashboard {
                 grid-template-columns: 1fr;
@@ -243,7 +243,7 @@
             }
         }
         
-        /* Footer Styles */
+        
         footer {
             background-color: var(--primary-dark);
             color: white;
@@ -252,7 +252,7 @@
             margin-top: 2rem;
         }
         
-        /* Tabs Styles */
+        
         .tabs {
             display: flex;
             margin-bottom: 1rem;
@@ -279,7 +279,7 @@
             display: block;
         }
         
-        /* Summary box */
+        
         .summary-box {
             background-color: var(--primary-lightest);
             border-left: 4px solid var(--primary);
@@ -298,7 +298,7 @@
             color: var(--dark);
         }
         
-        /* Help tooltip */
+        
         .tooltip {
             position: relative;
             display: inline-block;
@@ -617,7 +617,7 @@
             }
         }
         
-        // Function to update charts with new data
+        
         function updateCharts(data) {
             for (const [key, chartData] of Object.entries(data)) {
                 const chart = charts[key];
@@ -629,7 +629,7 @@
             }
         }
         
-        // Function to calculate and display average metrics
+        
         function updateAverageMetrics(data) {
             document.getElementById('avg-emergency').textContent = Math.round(calculateAverage(data.Emergency_Cases.predictions));
             document.getElementById('avg-beds').textContent = calculateAverage(data.Hospital_Bed_Utilization_Percentage.predictions).toFixed(1) + '%';
@@ -639,12 +639,12 @@
             document.getElementById('avg-supplies').textContent = calculateAverage(data.Medical_Supplies_Utilization_Percentage.predictions).toFixed(1) + '%';
         }
         
-        // Function to calculate average of an array
+        
         function calculateAverage(array) {
             return array.reduce((a, b) => a + b, 0) / array.length;
         }
         
-        // Function to generate prediction summary
+        
         function generateSummary(data, region) {
             const emergencyAvg = calculateAverage(data.Emergency_Cases.predictions);
             const icuAvg = calculateAverage(data.ICU_Utilization_Percentage.predictions);
@@ -667,7 +667,7 @@
                 recommendationText = "Current resources appear adequate for predicted demand. Continue regular monitoring.";
             }
             
-            // Analyze trends
+            
             const firstWeekEmergency = data.Emergency_Cases.predictions.slice(0, 7);
             const lastWeekEmergency = data.Emergency_Cases.predictions.slice(-7);
             const firstWeekAvg = calculateAverage(firstWeekEmergency);
@@ -686,25 +686,25 @@
             return `For ${region}, the system predicts an average of ${Math.round(emergencyAvg)} daily emergency cases with ICU utilization averaging ${icuAvg.toFixed(1)}% and hospital bed utilization at ${bedAvg.toFixed(1)}%. Resource risk level: ${riskLevel}. ${trendText} ${recommendationText}`;
         }
         
-        // Function to populate data table
+        
         function populateTable(data) {
             const tableBody = document.getElementById('table-body');
             tableBody.innerHTML = '';
             
-            // We'll use the dates from one of the metrics
+            
             const dates = data.Emergency_Cases.dates;
             
             for (let i = 0; i < dates.length; i++) {
                 const row = document.createElement('tr');
                 row.style.borderBottom = '1px solid var(--gray-light)';
                 
-                // Date cell
+                
                 const dateCell = document.createElement('td');
                 dateCell.style.padding = '0.75rem';
                 dateCell.textContent = dates[i];
                 row.appendChild(dateCell);
                 
-                // Data cells for each metric
+                
                 const metrics = [
                     'Emergency_Cases',
                     'Hospital_Bed_Utilization_Percentage',
@@ -720,14 +720,14 @@
                     
                     let value = data[metric].predictions[i];
                     
-                    // Format the value
+                    
                     if (metric === 'Emergency_Cases') {
                         cell.textContent = Math.round(value);
                     } else {
                         cell.textContent = value.toFixed(1) + '%';
                     }
                     
-                    // Highlight high utilization
+                    
                     if (metric.includes('Percentage') && value > 85) {
                         cell.style.color = 'var(--danger)';
                         cell.style.fontWeight = '600';
@@ -743,7 +743,7 @@
             }
         }
         
-        // Function to handle the form submission
+        
         document.getElementById('prediction-form').addEventListener('submit', function(e) {
             e.preventDefault();
             
@@ -753,16 +753,16 @@
             const resultsDiv = document.getElementById('results');
             const errorAlert = document.getElementById('error-alert');
             
-            // Update region display
+            
             document.getElementById('region-display').textContent = region;
             
-            // Show loading spinner and disable button
+            
             loadingDiv.style.display = 'block';
             predictBtn.disabled = true;
             errorAlert.style.display = 'none';
             resultsDiv.style.display = 'none';
             
-            // Make the API request
+            
             fetch('/predict', {
                 method: 'POST',
                 headers: {
@@ -777,74 +777,73 @@
                 return response.json();
             })
             .then(data => {
-                // Hide loading spinner
+                
                 loadingDiv.style.display = 'none';
                 
-                // Update UI with the results
+                
                 updateCharts(data);
                 updateAverageMetrics(data);
                 populateTable(data);
                 
-                // Generate and display summary
+                
                 const summaryText = generateSummary(data, region);
                 document.getElementById('prediction-summary').textContent = summaryText;
                 
-                // Show results
+                
                 resultsDiv.style.display = 'block';
                 
-                // Re-enable button
+                
                 predictBtn.disabled = false;
             })
             .catch(error => {
-                // Hide loading spinner
+                
                 loadingDiv.style.display = 'none';
                 
-                // Show error message
+                
                 errorAlert.textContent = 'Error generating predictions. Please try again later.';
                 errorAlert.style.display = 'block';
                 
-                // Re-enable button
+                
                 predictBtn.disabled = false;
                 
                 console.error('Error:', error);
             });
         });
         
-        // Tab switching functionality
+        
         document.querySelectorAll('.tab').forEach(tab => {
             tab.addEventListener('click', function() {
-                // Remove active class from all tabs
+                
                 document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
                 document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
                 
-                // Add active class to clicked tab
+                
                 this.classList.add('active');
                 
-                // Show corresponding content
+                
                 const tabName = this.getAttribute('data-tab');
                 document.getElementById(tabName).classList.add('active');
             });
         });
         
-        // Initialize charts on page loa
-        // Initialize charts on page load
+        
         document.addEventListener('DOMContentLoaded', function() {
             initializeCharts();
             
-            // Generate mock data for demo purposes
+           
             function generateMockData() {
                 const region = document.getElementById('region').value;
                 const today = new Date();
                 const dates = [];
                 
-                // Generate 30 days of dates
+                
                 for (let i = 0; i < 30; i++) {
                     const date = new Date(today);
                     date.setDate(today.getDate() + i);
                     dates.push(date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }));
                 }
                 
-                // Generate mock values based on region
+               
                 let baseEmergency, baseBed, baseICU, baseAmbulance, baseStaff, baseSupplies;
                 let trendFactor = 0;
                 
@@ -913,7 +912,7 @@
                         trendFactor = 0;
                 }
                 
-                // Generate data with some randomness and trends
+                
                 const emergencyCases = [];
                 const bedUtilization = [];
                 const icuUtilization = [];
@@ -922,23 +921,23 @@
                 const suppliesUtilization = [];
                 
                 for (let i = 0; i < 30; i++) {
-                    // Add randomness factor
+                    
                     const dayVariation = Math.random() * 20 - 10;
                     const percentVariation = Math.random() * 6 - 3;
                     
-                    // Add seasonal variation (weekends might have more emergencies)
+                    
                     const currentDate = new Date(today);
                     currentDate.setDate(today.getDate() + i);
                     const dayOfWeek = currentDate.getDay();
                     const weekendFactor = (dayOfWeek === 0 || dayOfWeek === 6) ? 1.1 : 1;
                     
-                    // Add trend over time
+             
                     const trendEffect = 1 + (trendFactor * (i / 30));
                     
-                    // Calculate final values
+                 
                     emergencyCases.push(Math.max(50, Math.round((baseEmergency * weekendFactor * trendEffect) + dayVariation)));
                     
-                    // Utilization percentages shouldn't exceed 100%
+                    
                     const bedValue = Math.min(99, Math.max(30, (baseBed * weekendFactor * trendEffect) + percentVariation));
                     const icuValue = Math.min(99, Math.max(30, (baseICU * weekendFactor * trendEffect) + percentVariation));
                     const ambulanceValue = Math.min(99, Math.max(30, (baseAmbulance * weekendFactor * trendEffect) + percentVariation));
@@ -952,7 +951,7 @@
                     suppliesUtilization.push(suppliesValue);
                 }
                 
-                // Create data structure
+                
                 return {
                     Emergency_Cases: {
                         dates: dates,
@@ -981,26 +980,26 @@
                 };
             }
             
-            // For demo purposes, simulate the API call
+            
             const originalFetch = window.fetch;
             window.fetch = function(url, options) {
                 if (url === '/predict') {
                     return new Promise((resolve) => {
-                        // Simulate network delay
+                       
                         setTimeout(() => {
                             const mockData = generateMockData();
                             resolve({
                                 ok: true,
                                 json: () => Promise.resolve(mockData)
                             });
-                        }, 1500); // 1.5 second delay
+                        }, 1500);
                     });
                 }
                 return originalFetch(url, options);
             };
         });
         
-        // Add event listeners for tooltips
+        
         document.querySelectorAll('.tooltip-icon').forEach(icon => {
             icon.addEventListener('mouseenter', function() {
                 this.nextElementSibling.style.visibility = 'visible';
