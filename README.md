@@ -137,15 +137,15 @@ To evaluate the performance of these models, the following metrics are used:
 
 ## Data
 
-##📄 README: Emergency Healthcare Utilization in India Dataset
-📁 File Name
+## Emergency Healthcare Utilization in India Dataset
+## 📁 File Name
 Emergency_Healthcare_Utilization_India.xlsx
 
 📊 Description
 This dataset contains information related to the utilization of emergency healthcare services across different regions or time periods in India. It includes metrics such as number of visits, patient demographics, treatment types, and outcomes related to emergency medical services.
 May contain multiple sheets covering various aspects of emergency healthcare utilization.
 
-📚 Contents Overview
+## 📚 Contents Overview
 Each sheet may contain data such as:
 
 Region/State
@@ -168,7 +168,7 @@ Referral Details
 
 Length of Stay
 
-🔍 Usage
+## 🔍 Usage
 This dataset can be used for:
 
 Analyzing trends in emergency healthcare demand.
@@ -181,7 +181,7 @@ Studying outcomes based on facility or region.
 
 Research or academic purposes related to public health and policy.
 
-🧼 Data Cleaning Suggestions
+## 🧼 Data Cleaning Suggestions
 Standardize column names for analysis.
 
 Handle missing values where applicable.
@@ -190,8 +190,64 @@ Convert date columns into consistent datetime format.
 
 Normalize text fields (e.g., treatment names, region names).
 
-📌 Source
+## 📌 Source
 Source: https://data.humdata.org/dataset/world-bank-combined-indicators-for-india
 
+## Healthcare and Socioeconomic Datasets (India & USA)
+This dataset collection provides an extensive view of healthcare utilization, social determinants, and socioeconomic metadata across India and the USA. The data can be used for research, statistical analysis, and data-driven decision-making.
 
+## 📦 Dataset Summary
+## 1️⃣ Emergency Healthcare Utilization – India
+File: Emergency_Healthcare_Utilization_India.xlsx
 
+Format: Excel Workbook
+
+Overview: Emergency healthcare statistics in India, likely categorized by:
+
+Region
+
+Type of emergency
+
+Patient demographics (age, gender)
+
+Healthcare facility type (public/private)
+
+Treatment outcomes
+
+## 2️⃣ Healthcare Metadata – USA (2018)
+File: metadata_usa_2018.csv
+
+Format: CSV
+
+Overview: 2018 metadata related to U.S. states, potentially includes:
+
+Population
+
+GDP per capita
+
+Healthcare expenditure
+
+Hospital infrastructure
+
+Life expectancy, mortality rate
+
+## 3️⃣ Social Determinants of Health (SDoH) – USA
+File: SDoH_data (1).csv
+
+Format: CSV
+
+Overview: SDoH indicators across U.S. regions such as:
+
+Education
+
+Income level
+
+Housing quality
+
+Unemployment rates
+
+Food access
+
+Health insurance coverage
+
+Source: https://www.ahrq.gov/sdoh/data-analytics/sdoh-data.html
