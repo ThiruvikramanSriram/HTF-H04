@@ -135,4 +135,63 @@ To evaluate the performance of these models, the following metrics are used:
 ### For VAR:
 - **AIC (Akaike Information Criterion)** and **BIC (Bayesian Information Criterion)**: For model selection and comparing different models based on their complexity.
 
+## Data
+
+##📄 README: Emergency Healthcare Utilization in India Dataset
+📁 File Name
+Emergency_Healthcare_Utilization_India.xlsx
+
+📊 Description
+This dataset contains information related to the utilization of emergency healthcare services across different regions or time periods in India. It includes metrics such as number of visits, patient demographics, treatment types, and outcomes related to emergency medical services.
+May contain multiple sheets covering various aspects of emergency healthcare utilization.
+
+📚 Contents Overview
+Each sheet may contain data such as:
+
+Region/State
+
+Date/Year
+
+Number of Emergency Visits
+
+Hospital/Facility Type
+
+Reason for Visit (e.g., accidents, cardiac arrest, respiratory issues)
+
+Patient Age Groups
+
+Gender Distribution
+
+Treatment Outcome
+
+Referral Details
+
+Length of Stay
+
+🔍 Usage
+This dataset can be used for:
+
+Analyzing trends in emergency healthcare demand.
+
+Regional comparison of emergency service utilization.
+
+Identifying peak times for emergency cases.
+
+Studying outcomes based on facility or region.
+
+Research or academic purposes related to public health and policy.
+
+🧼 Data Cleaning Suggestions
+Standardize column names for analysis.
+
+Handle missing values where applicable.
+
+Convert date columns into consistent datetime format.
+
+Normalize text fields (e.g., treatment names, region names).
+
+📌 Source
+Source: https://data.humdata.org/dataset/world-bank-combined-indicators-for-india
+
+
 
