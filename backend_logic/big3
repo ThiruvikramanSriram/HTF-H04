@@ -1,0 +1,1983 @@
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+from statsmodels.tsa.statespace.sarimax import SARIMAX
+from statsmodels.tsa.vector_ar.var_model import VAR
+from prophet import Prophet
+from sklearn.preprocessing import MinMaxScaler
+from sklearn.metrics import mean_squared_error, mean_absolute_error
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.model_selection import TimeSeriesSplit, RandomizedSearchCV
+from xgboost import XGBRegressor
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Dense, LSTM, Dropout
+from tensorflow.keras.optimizers import Adam
+from tensorflow.keras.callbacks import EarlyStopping
+import joblib
+import multiprocessing
+from tqdm import tqdm
+import yaml
+import os
+import warnings
+import json
+from datetime import datetime
+from pathlib import Path
+
+# Suppress warnings
+warnings.filterwarnings('ignore')
+
+# Enable interactive mode for matplotlib
+plt.ion()
+
+# Configuration management
+CONFIG_FILE = 'forecast_config.yaml'
+
+
+def load_config():
+    """Load configuration from YAML file or create default if not exists"""
+    if os.path.exists(CONFIG_FILE):
+        with open(CONFIG_FILE, 'r') as file:
+            config = yaml.safe_load(file)
+            print("Loaded configuration:", config)  # Debug print
+            return config
+    else:
+        # Default configuration
+        config = {
+
+            'data': {
+                'train_test_split': 0.8,
+                'look_back': 7
+            },
+            'models': {
+                'sarima': {
+                    'order': [1, 1, 1],
+                    'seasonal_order': [1, 1, 1, 7]
+                },
+                'lstm': {
+                    'units': [32, 16],
+                    'dropout': 0.2,
+                    'learning_rate': 1e-3,
+                    'epochs': 50,
+                    'batch_size': 16
+                },
+                'rf': {
+                    'n_estimators': 100,
+                    'max_depth': 10
+                },
+                'xgboost': {
+                    'n_estimators': 100,
+                    'learning_rate': 0.1,
+                    'max_depth': 5
+                },
+                'prophet': {
+                    'changepoint_prior_scale': 0.05,
+                    'seasonality_mode': 'multiplicative'
+                }
+            },
+            'hybrid': {
+                'weight_strategy': 'adaptive'  # 'equal' or 'adaptive'
+            },
+            'forecast': {
+                'future_days': 30,
+                'confidence_interval': 0.95
+            },
+            'alert': {
+                'threshold_stdev': 1.5
+            },
+            'output': {
+                'save_models': True,
+                'model_dir': 'saved_models',
+                'fig_dir': 'figures',
+                'report_file': 'healthcare_forecast_report.md'
+            }
+        }
+        
+        # Save default config
+        with open(CONFIG_FILE, 'w') as file:
+            yaml.dump(config, file)
+        
+        return config
+
+# Initialize configuration
+CONFIG = load_config()
+
+# Create directories if they don't exist
+os.makedirs(CONFIG['output']['model_dir'], exist_ok=True)
+os.makedirs(CONFIG['output']['fig_dir'], exist_ok=True)
+
+# Utility class for logging
+class Logger:
+    def __init__(self, log_file='forecast.log'):
+        self.log_file = log_file
+        
+    def log(self, message):
+        timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        log_entry = f"[{timestamp}] {message}"
+        print(log_entry)
+        
+        with open(self.log_file, 'a') as f:
+            f.write(log_entry + '\n')
+
+# Initialize logger
+logger = Logger()
+
+# Enhanced Data Loading and Preprocessing
+def load_and_preprocess_data(file_path):
+    """
+    Load and preprocess data with enhanced validation and feature engineering
+    """
+    logger.log(f"Loading data from {file_path}")
+    
+    try:
+        # Validate file exists
+        if not os.path.exists(file_path):
+            raise FileNotFoundError(f"File not found: {file_path}")
+        
+        # Check file type
+        if not file_path.endswith('.csv'):
+            raise ValueError(f"Expected CSV file, got: {file_path}")
+        
+        # Load the CSV data
+        df = pd.read_csv(file_path)
+        
+        # Validate data has content
+        if df.empty:
+            raise ValueError("CSV file is empty")
+        
+        logger.log(f"Data loaded successfully with {df.shape[0]} rows and {df.shape[1]} columns")
+        
+        # Extract numerical columns for prediction
+        numerical_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+        
+        if len(numerical_cols) == 0:
+            raise ValueError("No numerical columns found in the dataset")
+        
+        # Create a new dataframe with just the numerical columns
+        df_numeric = df[numerical_cols].copy()
+        
+        # Fill missing values with more sophisticated approach
+        for col in df_numeric.columns:
+            missing_count = df_numeric[col].isna().sum()
+            if missing_count > 0:
+                logger.log(f"Filling {missing_count} missing values in {col}")
+                
+                # Use rolling mean for filling if enough data, otherwise use column mean
+                if missing_count < len(df_numeric) * 0.5:
+                    # Get indices of missing values
+                    missing_indices = df_numeric[df_numeric[col].isna()].index
+                    
+                    # Fill with rolling mean where possible
+                    df_numeric[col] = df_numeric[col].fillna(
+                        df_numeric[col].rolling(window=5, min_periods=1, center=True).mean()
+                    )
+                    
+                    # Check if any NA values remain and fill with column mean
+                    if df_numeric[col].isna().any():
+                        df_numeric[col] = df_numeric[col].fillna(df_numeric[col].mean())
+                else:
+                    df_numeric[col] = df_numeric[col].fillna(df_numeric[col].mean())
+        
+        # ENHANCED: Create synthetic healthcare demand metric with more factors
+        health_factors = {
+            'disability': [col for col in df_numeric.columns if 'DISABLE' in col.upper()],
+            'insurance': [col for col in df_numeric.columns if 'UNINSURED' in col.upper() or 'INSUR' in col.upper()],
+            'education': [col for col in df_numeric.columns if 'EDU' in col.upper() or 'LT_HS' in col.upper() or 'SCHOOL' in col.upper()],
+            'income': [col for col in df_numeric.columns if 'INCOME' in col.upper() or 'POVERTY' in col.upper()],
+            'healthcare': [col for col in df_numeric.columns if 'MEDICAID' in col.upper() or 'MEDICARE' in col.upper() or 'HEALTH' in col.upper()]
+        }
+        
+        # Create demand index using weighted combination of factors
+        weights = {
+            'disability': 0.3,
+            'insurance': 0.25,
+            'education': 0.15,
+            'income': 0.15,
+            'healthcare': 0.15
+        }
+        
+        # Initialize healthcare demand
+        df_numeric['HEALTHCARE_DEMAND'] = 0
+        
+        # Add contribution from each factor group
+        for factor, cols in health_factors.items():
+            if cols:
+                logger.log(f"Using {factor} factors: {cols}")
+                # Normalize each column and create a factor score
+                for col in cols:
+                    min_val = df_numeric[col].min()
+                    max_val = df_numeric[col].max()
+                    
+                    # Skip if min == max (constant column)
+                    if min_val == max_val:
+                        continue
+                    
+                    # Normalize to 0-1 range and add weighted contribution
+                    normalized_col = (df_numeric[col] - min_val) / (max_val - min_val)
+                    df_numeric['HEALTHCARE_DEMAND'] += normalized_col * weights[factor] / len(cols)
+        
+        # If no factors were found, use mean of all columns
+        if df_numeric['HEALTHCARE_DEMAND'].sum() == 0:
+            logger.log("No specific health factors found. Using mean of all numerical columns.")
+            df_numeric['HEALTHCARE_DEMAND'] = df_numeric.mean(axis=1)
+        
+        # Scale the healthcare demand to a reasonable range (0-100)
+        min_max_scaler = MinMaxScaler(feature_range=(0, 100))
+        df_numeric['HEALTHCARE_DEMAND'] = min_max_scaler.fit_transform(
+            df_numeric['HEALTHCARE_DEMAND'].values.reshape(-1, 1)
+        )
+        
+        # ENHANCED: Create temporal features
+        # For time series prediction, let's create dates (try to use date column if exists)
+        date_cols = [col for col in df.columns if 'DATE' in col.upper() or 'TIME' in col.upper()]
+        
+        if date_cols and pd.api.types.is_datetime64_any_dtype(df[date_cols[0]]):
+            logger.log(f"Using existing date column: {date_cols[0]}")
+            dates = pd.to_datetime(df[date_cols[0]])
+        else:
+            logger.log("Creating synthetic dates based on record count")
+            start_date = pd.Timestamp.now() - pd.Timedelta(days=len(df_numeric))
+            dates = pd.date_range(start=start_date, periods=len(df_numeric), freq='D')
+        
+        # Create a new DataFrame with dates as index
+        time_series_df = pd.DataFrame({'HEALTHCARE_DEMAND': df_numeric['HEALTHCARE_DEMAND'].values}, index=dates)
+        
+        # ENHANCED: Add calendar features
+        time_series_df['day_of_week'] = time_series_df.index.dayofweek
+        time_series_df['month'] = time_series_df.index.month
+        time_series_df['day'] = time_series_df.index.day
+        time_series_df['is_weekend'] = time_series_df['day_of_week'].isin([5, 6]).astype(int)
+        
+        # Add US holidays if available
+        try:
+            from pandas.tseries.holiday import USFederalHolidayCalendar
+            cal = USFederalHolidayCalendar()
+            holidays = cal.holidays(start=time_series_df.index.min(), end=time_series_df.index.max())
+            time_series_df['is_holiday'] = time_series_df.index.isin(holidays).astype(int)
+        except:
+            time_series_df['is_holiday'] = 0
+            
+        # Add lag features
+        for lag in range(1, 8):
+            time_series_df[f'demand_lag_{lag}'] = time_series_df['HEALTHCARE_DEMAND'].shift(lag)
+            
+        # Add rolling statistics
+        time_series_df['demand_rolling_mean_7'] = time_series_df['HEALTHCARE_DEMAND'].rolling(window=7).mean()
+        time_series_df['demand_rolling_std_7'] = time_series_df['HEALTHCARE_DEMAND'].rolling(window=7).std()
+        
+        # Drop NaN values from the added features
+        time_series_df = time_series_df.fillna(method='bfill').fillna(method='ffill')
+        
+        logger.log(f"Preprocessing complete. Final shape: {time_series_df.shape}")
+        
+        return time_series_df, df_numeric
+        
+    except Exception as e:
+        logger.log(f"Error in data loading and preprocessing: {str(e)}")
+        raise
+
+# Enhanced Exploratory Data Analysis
+def perform_eda(df, df_numeric):
+    """Enhanced EDA function with additional visualizations and insights"""
+    logger.log("Starting exploratory data analysis")
+    
+    try:
+        # Create output directory for figures
+        os.makedirs(CONFIG['output']['fig_dir'], exist_ok=True)
+        
+        # 1. Time Series Plot
+        plt.figure(figsize=(12, 6))
+        plt.plot(df.index, df['HEALTHCARE_DEMAND'], linewidth=2)
+        plt.title('Time Series of Healthcare Demand', fontsize=16)
+        plt.xlabel('Date', fontsize=12)
+        plt.ylabel('Healthcare Demand Index', fontsize=12)
+        plt.grid(True)
+        plt.tight_layout()
+        plt.savefig(os.path.join(CONFIG['output']['fig_dir'], 'healthcare_demand_timeseries.png'), dpi=300, bbox_inches='tight')
+        plt.close()
+        
+        # 2. Distribution of healthcare demand
+        plt.figure(figsize=(10, 6))
+        sns.histplot(df['HEALTHCARE_DEMAND'], kde=True, bins=30)
+        plt.axvline(df['HEALTHCARE_DEMAND'].mean(), color='r', linestyle='--', 
+                   label=f'Mean: {df["HEALTHCARE_DEMAND"].mean():.2f}')
+        plt.axvline(df['HEALTHCARE_DEMAND'].median(), color='g', linestyle='--', 
+                   label=f'Median: {df["HEALTHCARE_DEMAND"].median():.2f}')
+        plt.title('Distribution of Healthcare Demand', fontsize=16)
+        plt.xlabel('Healthcare Demand Index', fontsize=12)
+        plt.ylabel('Frequency', fontsize=12)
+        plt.legend()
+        plt.grid(True, alpha=0.3)
+        plt.savefig(os.path.join(CONFIG['output']['fig_dir'], 'healthcare_demand_distribution.png'), dpi=300, bbox_inches='tight')
+        plt.close()
+        
+        # 3. Rolling statistics
+        plt.figure(figsize=(12, 10))
+        
+        # Original series
+        plt.subplot(411)
+        plt.plot(df.index, df['HEALTHCARE_DEMAND'], label='Original', linewidth=1.5)
+        plt.title('Original Healthcare Demand', fontsize=14)
+        plt.grid(True, alpha=0.3)
+        plt.legend()
+        
+        # Rolling mean with different windows
+        plt.subplot(412)
+        for window in [7, 14, 30]:
+            if len(df) > window:
+                rolling_mean = df['HEALTHCARE_DEMAND'].rolling(window=window).mean()
+                plt.plot(df.index, rolling_mean, 
+                        label=f'Rolling Mean ({window}-day)', linewidth=1.5)
+        plt.title('Rolling Mean Analysis', fontsize=14)
+        plt.grid(True, alpha=0.3)
+        plt.legend()
+        
+        # Rolling std
+        plt.subplot(413)
+        for window in [7, 14, 30]:
+            if len(df) > window:
+                rolling_std = df['HEALTHCARE_DEMAND'].rolling(window=window).std()
+                plt.plot(df.index, rolling_std, 
+                        label=f'Rolling Std ({window}-day)', linewidth=1.5)
+        plt.title('Rolling Standard Deviation Analysis', fontsize=14)
+        plt.grid(True, alpha=0.3)
+        plt.legend()
+        
+        # Autocorrelation
+        plt.subplot(414)
+        from pandas.plotting import autocorrelation_plot
+        try:
+            autocorrelation_plot(df['HEALTHCARE_DEMAND'])
+            plt.title('Autocorrelation Analysis', fontsize=14)
+        except:
+            plt.text(0.5, 0.5, 'Autocorrelation plot not available',
+                    horizontalalignment='center', verticalalignment='center')
+        
+        plt.tight_layout()
+        plt.savefig(os.path.join(CONFIG['output']['fig_dir'], 'healthcare_demand_rolling_stats.png'), dpi=300, bbox_inches='tight')
+        plt.close()
+        
+        # 4. Correlation between SDoH factors and healthcare demand
+        if len(df_numeric.columns) > 5:  # Only if we have enough columns
+            # Select relevant SDoH columns
+            sdoh_cols = [col for col in df_numeric.columns if col != 'HEALTHCARE_DEMAND']
+            
+            # Limit to top correlations to avoid clutter
+            if len(sdoh_cols) > 15:
+                correlations = df_numeric[sdoh_cols].corrwith(df_numeric['HEALTHCARE_DEMAND'])
+                sdoh_cols = correlations.abs().nlargest(15).index.tolist()
+            
+            if sdoh_cols:
+                corr_df = df_numeric[sdoh_cols + ['HEALTHCARE_DEMAND']]
+                corr_matrix = corr_df.corr()
+                
+                plt.figure(figsize=(12, 10))
+                mask = np.triu(np.ones_like(corr_matrix, dtype=bool))
+                cmap = sns.diverging_palette(230, 20, as_cmap=True)
+                sns.heatmap(corr_matrix, mask=mask, cmap=cmap, annot=True, 
+                           fmt='.2f', linewidths=0.5, center=0)
+                plt.title('Correlation Between SDoH Factors and Healthcare Demand', fontsize=16)
+                plt.xticks(rotation=45, ha='right')
+                plt.tight_layout()
+                plt.savefig(os.path.join(CONFIG['output']['fig_dir'], 'healthcare_demand_correlation.png'), dpi=300, bbox_inches='tight')
+                plt.close()
+                
+                # 5. Top Feature Importance
+                plt.figure(figsize=(10, 8))
+                top_correlations = corr_matrix['HEALTHCARE_DEMAND'].drop('HEALTHCARE_DEMAND').abs().sort_values(ascending=False)
+                
+                sns.barplot(x=top_correlations.values, y=top_correlations.index)
+                plt.title('Feature Importance for Healthcare Demand', fontsize=16)
+                plt.xlabel('Absolute Correlation', fontsize=12)
+                plt.tight_layout()
+                plt.savefig(os.path.join(CONFIG['output']['fig_dir'], 'feature_importance.png'), dpi=300, bbox_inches='tight')
+                plt.close()
+        
+        # 6. Calendar features analysis
+        if all(col in df.columns for col in ['day_of_week', 'month', 'is_weekend']):
+            # Day of week analysis
+            plt.figure(figsize=(14, 10))
+            
+            plt.subplot(221)
+            sns.boxplot(x='day_of_week', y='HEALTHCARE_DEMAND', data=df)
+            plt.title('Healthcare Demand by Day of Week', fontsize=14)
+            plt.xlabel('Day of Week (0=Monday, 6=Sunday)', fontsize=12)
+            plt.ylabel('Healthcare Demand Index', fontsize=12)
+            
+            plt.subplot(222)
+            sns.boxplot(x='month', y='HEALTHCARE_DEMAND', data=df)
+            plt.title('Healthcare Demand by Month', fontsize=14)
+            plt.xlabel('Month', fontsize=12)
+            plt.ylabel('Healthcare Demand Index', fontsize=12)
+            
+            plt.subplot(223)
+            sns.boxplot(x='is_weekend', y='HEALTHCARE_DEMAND', data=df)
+            plt.title('Healthcare Demand: Weekday vs Weekend', fontsize=14)
+            plt.xlabel('Is Weekend (0=No, 1=Yes)', fontsize=12)
+            plt.ylabel('Healthcare Demand Index', fontsize=12)
+            
+            plt.subplot(224)
+            if 'is_holiday' in df.columns:
+                sns.boxplot(x='is_holiday', y='HEALTHCARE_DEMAND', data=df)
+                plt.title('Healthcare Demand: Regular Day vs Holiday', fontsize=14)
+                plt.xlabel('Is Holiday (0=No, 1=Yes)', fontsize=12)
+                plt.ylabel('Healthcare Demand Index', fontsize=12)
+            
+            plt.tight_layout()
+            plt.savefig(os.path.join(CONFIG['output']['fig_dir'], 'calendar_feature_analysis.png'), dpi=300, bbox_inches='tight')
+            plt.close()
+        
+        # 7. Lag Feature Analysis
+        lag_cols = [col for col in df.columns if 'lag' in col]
+        if lag_cols:
+            plt.figure(figsize=(14, 7))
+            
+            # Correlation between target and its lags
+            lag_corr = [df['HEALTHCARE_DEMAND'].corr(df[lag_col]) for lag_col in lag_cols]
+            
+            plt.bar(range(len(lag_cols)), lag_corr)
+            plt.xticks(range(len(lag_cols)), [col.replace('demand_lag_', '') for col in lag_cols])
+            plt.title('Correlation of Healthcare Demand with Lagged Values', fontsize=16)
+            plt.xlabel('Lag (Days)', fontsize=12)
+            plt.ylabel('Correlation Coefficient', fontsize=12)
+            plt.grid(True, alpha=0.3)
+            plt.tight_layout()
+            plt.savefig(os.path.join(CONFIG['output']['fig_dir'], 'lag_correlation.png'), dpi=300, bbox_inches='tight')
+            plt.close()
+        
+        logger.log("Exploratory data analysis completed successfully")
+        
+    except Exception as e:
+        logger.log(f"Error in EDA: {str(e)}")
+        import traceback
+        logger.log(traceback.format_exc())
+
+# Cross-validation for time series
+def create_cv_folds(X, n_splits=5):
+    """Create time series cross-validation folds"""
+    tscv = TimeSeriesSplit(n_splits=n_splits)
+    return list(tscv.split(X))
+
+# Optimized SARIMA Model
+def implement_sarima(df, train_size, cv_folds=None):
+    """Improved SARIMA implementation with cross-validation and error handling"""
+    logger.log("Implementing SARIMA model")
+    
+    try:
+        df = df.asfreq('D')
+        
+        # For initial model building
+        train = df[:train_size]
+        test = df[train_size:]
+        
+        # Get model parameters from config
+        order = tuple(CONFIG['models']['sarima']['order'])
+        seasonal_order = tuple(CONFIG['models']['sarima']['seasonal_order'])
+        
+        # Best model parameters
+        best_order = order
+        best_seasonal_order = seasonal_order
+        best_aic = float('inf')
+        
+        # If we have enough data, try to optimize parameters
+        if len(train) > 30:
+            orders = [(1, 1, 1), (1, 1, 2), (2, 1, 1), (2, 1, 2)]
+            seasonal_orders = [(1, 1, 1, 7), (1, 1, 0, 7), (0, 1, 1, 7)]
+            
+            for o in orders:
+                for so in seasonal_orders:
+                    try:
+                        temp_model = SARIMAX(train['HEALTHCARE_DEMAND'], order=o, seasonal_order=so)
+                        temp_results = temp_model.fit(disp=False)
+                        
+                        if temp_results.aic < best_aic:
+                            best_aic = temp_results.aic
+                            best_order = o
+                            best_seasonal_order = so
+                            
+                    except:
+                        continue
+        
+        # Train the model with best parameters
+        model = SARIMAX(train['HEALTHCARE_DEMAND'], 
+                        order=best_order, 
+                        seasonal_order=best_seasonal_order)
+        results = model.fit(disp=False)
+        
+        # Generate forecast
+        forecast = results.get_forecast(steps=len(test))
+        forecast_mean = forecast.predicted_mean
+        forecast_conf_int = forecast.conf_int(alpha=1-CONFIG['forecast']['confidence_interval'])
+        
+        # Calculate RMSE
+        if len(test) > 0:
+            rmse = np.sqrt(mean_squared_error(test['HEALTHCARE_DEMAND'], forecast_mean))
+        else:
+            rmse = np.nan
+        
+        # Save model if configured
+        if CONFIG['output']['save_models']:
+            model_path = os.path.join(CONFIG['output']['model_dir'], 'sarima_model.pkl')
+            with open(model_path, 'wb') as f:
+                joblib.dump(results, f)
+            logger.log(f"SARIMA model saved to {model_path}")
+        
+        # Create a result dictionary
+        result = {
+            'forecast': forecast_mean,
+            'lower_bound': forecast_conf_int.iloc[:, 0],
+            'upper_bound': forecast_conf_int.iloc[:, 1],
+            'rmse': rmse,
+            'model_params': {
+                'order': best_order,
+                'seasonal_order': best_seasonal_order,
+                'aic': best_aic if best_aic != float('inf') else None
+            }
+        }
+        
+        logger.log(f"SARIMA model completed with RMSE: {rmse:.4f}")
+        return result
+        
+    except Exception as e:
+        logger.log(f"SARIMA Error: {str(e)}")
+        # Create a placeholder result
+        placeholder_result = {
+            'forecast': pd.Series([np.nan] * len(df[train_size:]), index=df[train_size:].index),
+            'lower_bound': pd.Series([np.nan] * len(df[train_size:]), index=df[train_size:].index),
+            'upper_bound': pd.Series([np.nan] * len(df[train_size:]), index=df[train_size:].index),
+            'rmse': np.nan,
+            'model_params': {
+                'order': None,
+                'seasonal_order': None,
+                'aic': None,
+                'error': str(e)
+            }
+        }
+        return placeholder_result
+
+# Enhanced LSTM Model
+def implement_lstm(df, train_size, look_back=None):
+    """Improved LSTM implementation with architecture optimization and regularization"""
+    logger.log("Implementing LSTM model")
+    
+    try:
+        # Get lookback from config or use default
+        if look_back is None:
+            look_back = CONFIG['data']['look_back']
+        
+        # Prepare data
+        target_col = 'HEALTHCARE_DEMAND'
+        feature_cols = [col for col in df.columns if col != target_col]
+        
+        # Scale the data
+        scaler_X = MinMaxScaler(feature_range=(0, 1))
+        scaler_y = MinMaxScaler(feature_range=(0, 1))
+        
+        # Scale X and y separately
+        if feature_cols:
+            X_scaled = scaler_X.fit_transform(df[feature_cols])
+            y_scaled = scaler_y.fit_transform(df[[target_col]])
+            
+            # Combine for easier handling
+            scaled_data = np.hstack((X_scaled, y_scaled))
+        else:
+            # If no feature columns, just scale the target
+            scaled_data = scaler_y.fit_transform(df[[target_col]])
+        
+        # Create sequences
+        def create_sequences(data, seq_length):
+            X, y = [], []
+            for i in range(len(data) - seq_length):
+                # Last column is always the target
+                X.append(data[i:i+seq_length, :])
+                y.append(data[i+seq_length, -1])
+            return np.array(X), np.array(y).reshape(-1, 1)
+        
+        # Handle case with limited data
+        if len(scaled_data) <= look_back + 1:
+            logger.log("Not enough data for LSTM model")
+            # Return placeholder result
+            placeholder_result = {
+                'forecast': pd.Series([np.nan] * len(df[train_size:]), index=df[train_size:].index),
+                'lower_bound': pd.Series([np.nan] * len(df[train_size:]), index=df[train_size:].index),
+                'upper_bound': pd.Series([np.nan] * len(df[train_size:]), index=df[train_size:].index),
+                'rmse': np.nan
+            }
+            return placeholder_result
+        
+        # Create sequence data
+        X, y = create_sequences(scaled_data, look_back)
+        
+        # Determine train size in sequences
+        train_seq_size = max(1, min(train_size - look_back, len(X) - 1))
+        
+        # Split into train and test sets
+        X_train, X_test = X[:train_seq_size], X[train_seq_size:]
+        y_train, y_test = y[:train_seq_size], y[train_seq_size:]
+        
+        # Ensure we have test data
+        if len(X_test) == 0:
+            X_test = X_train[-1:].copy()
+            y_test = y_train[-1:].copy()
+        
+        # Get model params from config
+        lstm_units = CONFIG['models']['lstm']['units']
+        dropout_rate = CONFIG['models']['lstm']['dropout']
+        learning_rate = CONFIG['models']['lstm']['learning_rate']
+        epochs = CONFIG['models']['lstm']['epochs']
+        batch_size = min(CONFIG['models']['lstm']['batch_size'], len(X_train))
+        
+        # Get input shape
+        _, timesteps, features = X_train.shape
+        
+        # Early stopping
+        early_stopping = EarlyStopping(
+            monitor='val_loss',
+            patience=10,
+            restore_best_weights=True
+        )
+        
+        # Build LSTM model
+        model = Sequential()
+        model.add(LSTM(lstm_units[0], return_sequences=len(lstm_units) > 1, 
+                      input_shape=(timesteps, features)))
+        model.add(Dropout(dropout_rate))
+        
+        # Add additional LSTM layers if specified
+        for i in range(1, len(lstm_units)):
+            return_sequences = i < len(lstm_units) - 1
+            model.add(LSTM(lstm_units[i], return_sequences=return_sequences))
+            model.add(Dropout(dropout_rate))
+        
+        model.add(Dense(16, activation='relu'))
+        model.add(Dense(1))
+        
+        # Compile model
+        model.compile(optimizer=Adam(learning_rate=learning_rate), loss='mse')
+        
+        # Fit model
+        history = model.fit(
+            X_train, y_train,
+            epochs=epochs,
+            batch_size=batch_size,
+            validation_split=0.2,
+            callbacks=[early_stopping],
+            verbose=0,
+            shuffle=False
+        )
+        
+        # Plot training history
+        plt.figure(figsize=(10, 6))
+        plt.plot(history.history['loss'], label='Training Loss')
+        plt.plot(history.history['val_loss'], label='Validation Loss')
+        plt.title('LSTM Model Training History', fontsize=16)
+        plt.xlabel('Epoch', fontsize=12)
+        plt.ylabel('Loss (MSE)', fontsize=12)
+        plt.legend()
+        plt.grid(True, alpha=0.3)
+        plt.savefig(os.path.join(CONFIG['output']['fig_dir'], 'lstm_training_history.png'), dpi=300, bbox_inches='tight')
+        plt.close()
+        
+        # Make
+        # Make predictions
+        y_pred = model.predict(X_test)
+        
+        # Inverse transform predictions
+        y_test_inv = scaler_y.inverse_transform(y_test)
+        y_pred_inv = scaler_y.inverse_transform(y_pred)
+        
+        # Calculate RMSE
+        rmse = np.sqrt(mean_squared_error(y_test_inv, y_pred_inv))
+        
+        # Save model if configured
+        if CONFIG['output']['save_models']:
+            model_path = os.path.join(CONFIG['output']['model_dir'], 'lstm_model.h5')
+            model.save(model_path)
+            # Save scaler
+            scaler_path = os.path.join(CONFIG['output']['model_dir'], 'lstm_scaler.pkl')
+            with open(scaler_path, 'wb') as f:
+                joblib.dump((scaler_X, scaler_y), f)
+            logger.log(f"LSTM model saved to {model_path}")
+        
+        # Create forecast Series aligned with test data
+        forecast_index = df[train_size:train_size+len(y_pred_inv)].index
+        forecast = pd.Series(y_pred_inv.flatten(), index=forecast_index)
+        
+        # Generate confidence intervals
+        forecast_std = np.std(y_test_inv - y_pred_inv)
+        z_value = 1.96  # 95% confidence interval
+        
+        lower_bound = pd.Series(
+            (y_pred_inv - z_value * forecast_std).flatten(), 
+            index=forecast_index
+        )
+        upper_bound = pd.Series(
+            (y_pred_inv + z_value * forecast_std).flatten(), 
+            index=forecast_index
+        )
+        
+        # Create result
+        result = {
+            'forecast': forecast,
+            'lower_bound': lower_bound,
+            'upper_bound': upper_bound,
+            'rmse': rmse
+        }
+        
+        logger.log(f"LSTM model completed with RMSE: {rmse:.4f}")
+        return result
+        
+    except Exception as e:
+        logger.log(f"LSTM Error: {str(e)}")
+        # Create a placeholder result
+        placeholder_result = {
+            'forecast': pd.Series([np.nan] * len(df[train_size:]), index=df[train_size:].index),
+            'lower_bound': pd.Series([np.nan] * len(df[train_size:]), index=df[train_size:].index),
+            'upper_bound': pd.Series([np.nan] * len(df[train_size:]), index=df[train_size:].index),
+            'rmse': np.nan
+        }
+        return placeholder_result
+
+# Enhanced Random Forest Model
+def implement_random_forest(df, train_size, cv_folds=None):
+    """Improved Random Forest implementation with hyperparameter tuning"""
+    logger.log("Implementing Random Forest model")
+    
+    try:
+        # Prepare data
+        target_col = 'HEALTHCARE_DEMAND'
+        feature_cols = [col for col in df.columns if col != target_col]
+        
+        if not feature_cols:
+            logger.log("No feature columns available for Random Forest")
+            # Return placeholder result
+            placeholder_result = {
+                'forecast': pd.Series([np.nan] * len(df[train_size:]), index=df[train_size:].index),
+                'lower_bound': pd.Series([np.nan] * len(df[train_size:]), index=df[train_size:].index),
+                'upper_bound': pd.Series([np.nan] * len(df[train_size:]), index=df[train_size:].index),
+                'rmse': np.nan
+            }
+            return placeholder_result
+        
+        # Split data
+        X_train = df[feature_cols][:train_size]
+        y_train = df[target_col][:train_size]
+        X_test = df[feature_cols][train_size:]
+        y_test = df[target_col][train_size:] if train_size < len(df) else None
+        
+        # Get model parameters from config
+        n_estimators = CONFIG['models']['rf']['n_estimators']
+        max_depth = CONFIG['models']['rf']['max_depth']
+        
+        # Hyperparameter tuning if we have enough data
+        if len(X_train) > 100:  # Only tune with sufficient data
+            logger.log("Performing Random Forest hyperparameter tuning")
+            
+            # Define parameter space
+            param_grid = {
+                'n_estimators': [50, 100, 200],
+                'max_depth': [None, 10, 20, 30],
+                'min_samples_split': [2, 5, 10],
+                'min_samples_leaf': [1, 2, 4],
+                'bootstrap': [True, False]
+            }
+            
+            # Create base model
+            rf = RandomForestRegressor(random_state=42)
+            
+            # Perform randomized search
+            n_iter = min(20, reduce(lambda x, y: x * len(y), param_grid.values(), 1))
+            
+            # Use time series cross-validation if provided
+            if cv_folds:
+                cv = cv_folds
+            else:
+                cv = 5  # Default CV
+                
+            random_search = RandomizedSearchCV(
+                rf, param_distributions=param_grid,
+                n_iter=n_iter, cv=cv, random_state=42,
+                scoring='neg_mean_squared_error', n_jobs=-1
+            )
+            
+            # Fit randomized search
+            random_search.fit(X_train, y_train)
+            
+            # Get best parameters
+            best_params = random_search.best_params_
+            logger.log(f"Best Random Forest parameters: {best_params}")
+            
+            # Create model with best parameters
+            model = RandomForestRegressor(**best_params, random_state=42)
+            
+        else:
+            # Create model with default parameters
+            model = RandomForestRegressor(
+                n_estimators=n_estimators,
+                max_depth=max_depth,
+                random_state=42
+            )
+        
+        # Train model
+        model.fit(X_train, y_train)
+        
+        # Feature importance
+        feature_importance = model.feature_importances_
+        sorted_idx = np.argsort(feature_importance)
+        
+        # Plot feature importance
+        plt.figure(figsize=(10, 8))
+        plt.barh(range(len(sorted_idx)), feature_importance[sorted_idx])
+        plt.yticks(range(len(sorted_idx)), [feature_cols[i] for i in sorted_idx])
+        plt.title('Random Forest Feature Importance', fontsize=16)
+        plt.xlabel('Importance', fontsize=12)
+        plt.tight_layout()
+        plt.savefig(os.path.join(CONFIG['output']['fig_dir'], 'rf_feature_importance.png'), dpi=300, bbox_inches='tight')
+        plt.close()
+        
+        # Make predictions
+        y_pred = model.predict(X_test)
+        
+        # Calculate RMSE if test data is available
+        if y_test is not None and len(y_test) > 0:
+            rmse = np.sqrt(mean_squared_error(y_test, y_pred))
+        else:
+            rmse = np.nan
+        
+        # Save model if configured
+        if CONFIG['output']['save_models']:
+            model_path = os.path.join(CONFIG['output']['model_dir'], 'rf_model.pkl')
+            with open(model_path, 'wb') as f:
+                joblib.dump(model, f)
+            logger.log(f"Random Forest model saved to {model_path}")
+        
+        # Create forecast Series aligned with test data
+        forecast_index = df[train_size:train_size+len(y_pred)].index
+        forecast = pd.Series(y_pred, index=forecast_index)
+        
+        # Generate prediction intervals using quantile regression forests approach
+        if hasattr(model, 'estimators_'):
+            # Get predictions from all trees
+            tree_preds = np.array([tree.predict(X_test) for tree in model.estimators_])
+            
+            # Calculate lower and upper bounds (95% prediction interval)
+            lower_bound = pd.Series(
+                np.percentile(tree_preds, 2.5, axis=0), 
+                index=forecast_index
+            )
+            upper_bound = pd.Series(
+                np.percentile(tree_preds, 97.5, axis=0), 
+                index=forecast_index
+            )
+        else:
+            # Fallback if we can't get individual tree predictions
+            std_dev = np.std(y_pred) if len(y_pred) > 1 else 0
+            lower_bound = pd.Series(y_pred - 1.96 * std_dev, index=forecast_index)
+            upper_bound = pd.Series(y_pred + 1.96 * std_dev, index=forecast_index)
+        
+        # Create result
+        result = {
+            'forecast': forecast,
+            'lower_bound': lower_bound,
+            'upper_bound': upper_bound,
+            'rmse': rmse,
+            'feature_importance': {feature_cols[i]: feature_importance[i] for i in range(len(feature_cols))}
+        }
+        
+        logger.log(f"Random Forest model completed with RMSE: {rmse:.4f}")
+        return result
+        
+    except Exception as e:
+        logger.log(f"Random Forest Error: {str(e)}")
+        # Create a placeholder result
+        placeholder_result = {
+            'forecast': pd.Series([np.nan] * len(df[train_size:]), index=df[train_size:].index),
+            'lower_bound': pd.Series([np.nan] * len(df[train_size:]), index=df[train_size:].index),
+            'upper_bound': pd.Series([np.nan] * len(df[train_size:]), index=df[train_size:].index),
+            'rmse': np.nan
+        }
+        return placeholder_result
+
+# Enhanced XGBoost Model
+def implement_xgboost(df, train_size, cv_folds=None):
+    """Improved XGBoost implementation with hyperparameter tuning"""
+    logger.log("Implementing XGBoost model")
+    
+    try:
+        # Prepare data
+        target_col = 'HEALTHCARE_DEMAND'
+        feature_cols = [col for col in df.columns if col != target_col]
+        
+        if not feature_cols:
+            logger.log("No feature columns available for XGBoost")
+            # Return placeholder result
+            placeholder_result = {
+                'forecast': pd.Series([np.nan] * len(df[train_size:]), index=df[train_size:].index),
+                'lower_bound': pd.Series([np.nan] * len(df[train_size:]), index=df[train_size:].index),
+                'upper_bound': pd.Series([np.nan] * len(df[train_size:]), index=df[train_size:].index),
+                'rmse': np.nan
+            }
+            return placeholder_result
+        
+        # Split data
+        X_train = df[feature_cols][:train_size]
+        y_train = df[target_col][:train_size]
+        X_test = df[feature_cols][train_size:]
+        y_test = df[target_col][train_size:] if train_size < len(df) else None
+        
+        # Get model parameters from config
+        n_estimators = CONFIG['models']['xgboost']['n_estimators']
+        learning_rate = CONFIG['models']['xgboost']['learning_rate']
+        max_depth = CONFIG['models']['xgboost']['max_depth']
+        
+        # Hyperparameter tuning if we have enough data
+        if len(X_train) > 100:  # Only tune with sufficient data
+            logger.log("Performing XGBoost hyperparameter tuning")
+            
+            # Define parameter space
+            param_grid = {
+                'n_estimators': [50, 100, 200],
+                'learning_rate': [0.01, 0.1, 0.2],
+                'max_depth': [3, 5, 7, 10],
+                'min_child_weight': [1, 3, 5],
+                'subsample': [0.7, 0.8, 0.9]
+            }
+            
+            # Create base model
+            xgb = XGBRegressor(random_state=42)
+            
+            # Perform randomized search
+            n_iter = min(20, reduce(lambda x, y: x * len(y), param_grid.values(), 1))
+            
+            # Use time series cross-validation if provided
+            if cv_folds:
+                cv = cv_folds
+            else:
+                cv = 5  # Default CV
+                
+            random_search = RandomizedSearchCV(
+                xgb, param_distributions=param_grid,
+                n_iter=n_iter, cv=cv, random_state=42,
+                scoring='neg_mean_squared_error', n_jobs=-1
+            )
+            
+            # Fit randomized search
+            random_search.fit(X_train, y_train)
+            
+            # Get best parameters
+            best_params = random_search.best_params_
+            logger.log(f"Best XGBoost parameters: {best_params}")
+            
+            # Create model with best parameters
+            model = XGBRegressor(**best_params, random_state=42)
+            
+        else:
+            # Create model with default parameters
+            model = XGBRegressor(
+                n_estimators=n_estimators,
+                learning_rate=learning_rate,
+                max_depth=max_depth,
+                random_state=42
+            )
+        
+        # Train model with early stopping
+        eval_set = [(X_train, y_train)]
+        if len(X_train) > 100:
+            # Create validation set
+            split_idx = int(len(X_train) * 0.8)
+            eval_set = [(X_train[:split_idx], y_train[:split_idx]), 
+                        (X_train[split_idx:], y_train[split_idx:])]
+            
+            model.fit(
+                X_train[:split_idx], y_train[:split_idx],
+                eval_set=eval_set,
+                early_stopping_rounds=20,
+                verbose=False
+            )
+        else:
+            model.fit(X_train, y_train)
+        
+        # Feature importance
+        feature_importance = model.feature_importances_
+        sorted_idx = np.argsort(feature_importance)
+        
+        # Plot feature importance
+        plt.figure(figsize=(10, 8))
+        plt.barh(range(len(sorted_idx)), feature_importance[sorted_idx])
+        plt.yticks(range(len(sorted_idx)), [feature_cols[i] for i in sorted_idx])
+        plt.title('XGBoost Feature Importance', fontsize=16)
+        plt.xlabel('Importance', fontsize=12)
+        plt.tight_layout()
+        plt.savefig(os.path.join(CONFIG['output']['fig_dir'], 'xgb_feature_importance.png'), dpi=300, bbox_inches='tight')
+        plt.close()
+        
+        # Make predictions
+        y_pred = model.predict(X_test)
+        
+        # Calculate RMSE if test data is available
+        if y_test is not None and len(y_test) > 0:
+            rmse = np.sqrt(mean_squared_error(y_test, y_pred))
+        else:
+            rmse = np.nan
+        
+        # Save model if configured
+        if CONFIG['output']['save_models']:
+            model_path = os.path.join(CONFIG['output']['model_dir'], 'xgb_model.pkl')
+            with open(model_path, 'wb') as f:
+                joblib.dump(model, f)
+            logger.log(f"XGBoost model saved to {model_path}")
+        
+        # Create forecast Series aligned with test data
+        forecast_index = df[train_size:train_size+len(y_pred)].index
+        forecast = pd.Series(y_pred, index=forecast_index)
+        
+        # For XGBoost, let's compute quantile regression for prediction intervals
+        quantile_model_lower = XGBRegressor(
+            objective='reg:quantile',
+            quantile_alpha=0.025,
+            **{k: v for k, v in model.get_params().items() if k != 'objective'}
+        )
+        quantile_model_upper = XGBRegressor(
+            objective='reg:quantile',
+            quantile_alpha=0.975,
+            **{k: v for k, v in model.get_params().items() if k != 'objective'}
+        )
+        
+        try:
+            # Try to train quantile models
+            quantile_model_lower.fit(X_train, y_train)
+            quantile_model_upper.fit(X_train, y_train)
+            
+            lower_bound = pd.Series(quantile_model_lower.predict(X_test), index=forecast_index)
+            upper_bound = pd.Series(quantile_model_upper.predict(X_test), index=forecast_index)
+        except:
+            # Fallback to simple confidence intervals if quantile regression fails
+            std_dev = np.std(y_pred) if len(y_pred) > 1 else 0
+            lower_bound = pd.Series(y_pred - 1.96 * std_dev, index=forecast_index)
+            upper_bound = pd.Series(y_pred + 1.96 * std_dev, index=forecast_index)
+        
+        # Create result
+        result = {
+            'forecast': forecast,
+            'lower_bound': lower_bound,
+            'upper_bound': upper_bound,
+            'rmse': rmse,
+            'feature_importance': {feature_cols[i]: feature_importance[i] for i in range(len(feature_cols))}
+        }
+        
+        logger.log(f"XGBoost model completed with RMSE: {rmse:.4f}")
+        return result
+        
+    except Exception as e:
+        logger.log(f"XGBoost Error: {str(e)}")
+        # Create a placeholder result
+        placeholder_result = {
+            'forecast': pd.Series([np.nan] * len(df[train_size:]), index=df[train_size:].index),
+            'lower_bound': pd.Series([np.nan] * len(df[train_size:]), index=df[train_size:].index),
+            'upper_bound': pd.Series([np.nan] * len(df[train_size:]), index=df[train_size:].index),
+            'rmse': np.nan
+        }
+        return placeholder_result
+
+# New Prophet Model Implementation
+def implement_prophet(df, train_size):
+    """Implement Facebook Prophet model for time series forecasting"""
+    logger.log("Implementing Prophet model")
+    
+    try:
+        # Prepare data in Prophet format
+        prophet_df = pd.DataFrame({
+            'ds': df.index,
+            'y': df['HEALTHCARE_DEMAND']
+        })
+        
+        # Split data
+        train_df = prophet_df[:train_size]
+        test_df = prophet_df[train_size:]
+        
+        # Get model parameters from config
+        changepoint_prior_scale = CONFIG['models']['prophet']['changepoint_prior_scale']
+        seasonality_mode = CONFIG['models']['prophet']['seasonality_mode']
+        
+        # Create and fit model
+        model = Prophet(
+            changepoint_prior_scale=changepoint_prior_scale,
+            seasonality_mode=seasonality_mode,
+            daily_seasonality=True,
+            weekly_seasonality=True,
+            yearly_seasonality=True,
+            interval_width=CONFIG['forecast']['confidence_interval']
+        )
+        
+        # Try to add holiday effects if we can import them
+        try:
+            from holidays import US
+            holiday_df = pd.DataFrame({
+                'holiday': 'US Holidays',
+                'ds': pd.to_datetime(list(US(years=df.index.year.unique()).keys()))
+            })
+            model.add_country_holidays(country_name='US')
+        except:
+            pass
+        
+        # Fit the model
+        model.fit(train_df)
+        
+        # Generate forecast for test period
+        future = model.make_future_dataframe(
+            periods=len(test_df),
+            freq='D'
+        )
+        forecast = model.predict(future)
+        
+        # Get only the test period forecasts
+        forecast_test = forecast.iloc[train_size:, :]
+        
+        # Calculate RMSE
+        if len(test_df) > 0:
+            rmse = np.sqrt(mean_squared_error(test_df['y'], forecast_test['yhat']))
+        else:
+            rmse = np.nan
+        
+        # Save model if configured
+        if CONFIG['output']['save_models']:
+            model_path = os.path.join(CONFIG['output']['model_dir'], 'prophet_model.pkl')
+            with open(model_path, 'wb') as f:
+                joblib.dump(model, f)
+            logger.log(f"Prophet model saved to {model_path}")
+        
+        # Create forecast Series aligned with test data
+        forecast_index = df[train_size:train_size+len(forecast_test)].index
+        forecast_series = pd.Series(forecast_test['yhat'].values, index=forecast_index)
+        lower_bound = pd.Series(forecast_test['yhat_lower'].values, index=forecast_index)
+        upper_bound = pd.Series(forecast_test['yhat_upper'].values, index=forecast_index)
+        
+        # Plot Prophet components
+        fig = model.plot_components(forecast)
+        plt.savefig(os.path.join(CONFIG['output']['fig_dir'], 'prophet_components.png'), dpi=300, bbox_inches='tight')
+        plt.close()
+        
+        # Create result
+        result = {
+            'forecast': forecast_series,
+            'lower_bound': lower_bound,
+            'upper_bound': upper_bound,
+            'rmse': rmse,
+            'components': {
+                'trend': forecast_test['trend'].values,
+                'weekly': forecast_test['weekly'].values if 'weekly' in forecast_test.columns else None,
+                'yearly': forecast_test['yearly'].values if 'yearly' in forecast_test.columns else None
+            }
+        }
+        
+        logger.log(f"Prophet model completed with RMSE: {rmse:.4f}")
+        return result
+        
+    except Exception as e:
+        logger.log(f"Prophet Error: {str(e)}")
+        # Create a placeholder result
+        placeholder_result = {
+            'forecast': pd.Series([np.nan] * len(df[train_size:]), index=df[train_size:].index),
+            'lower_bound': pd.Series([np.nan] * len(df[train_size:]), index=df[train_size:].index),
+            'upper_bound': pd.Series([np.nan] * len(df[train_size:]), index=df[train_size:].index),
+            'rmse': np.nan
+        }
+        return placeholder_result
+
+# VAR Model for Multivariate Analysis
+def implement_var(df, train_size):
+    """Implement VAR model for multivariate time series forecasting"""
+    logger.log("Implementing VAR model")
+    
+    try:
+        # Prepare data - we need multiple columns for VAR
+        target_col = 'HEALTHCARE_DEMAND'
+        feature_cols = [col for col in df.columns if col != target_col 
+                      and col not in ['day_of_week', 'month', 'day', 'is_weekend', 'is_holiday']]
+        
+        # We need at least one additional feature besides the target
+        if len(feature_cols) == 0:
+            # Create synthetic features if no real features are available
+            df['DEMAND_DIFF'] = df[target_col].diff().fillna(0)
+            df['DEMAND_MA'] = df[target_col].rolling(window=7).mean().fillna(method='bfill')
+            feature_cols = ['DEMAND_DIFF', 'DEMAND_MA']
+        
+        # Select top features based on correlation if too many
+        if len(feature_cols) > 5:
+            corr = df[feature_cols + [target_col]].corr()[target_col].abs()
+            feature_cols = corr.nlargest(5).index.tolist()
+            if target_col in feature_cols:
+                feature_cols.remove(target_col)
+        
+        # Create VAR dataframe
+        var_df = df[[target_col] + feature_cols].copy()
+        
+        # Fill any remaining missing values
+        var_df = var_df.fillna(method='bfill').fillna(method='ffill')
+        
+        # Split data
+        train_data = var_df[:train_size]
+        test_data = var_df[train_size:]
+        
+        # Find optimal lag order
+        max_lag = min(12, int(len(train_data) / 5))  # Rule of thumb
+        
+        var_model = VAR(train_data)
+        lag_order_results = {}
+        
+        for lag in range(1, max_lag + 1):
+            try:
+                result = var_model.fit(lag)
+                lag_order_results[lag] = result.aic
+            except:
+                continue
+        
+        if lag_order_results:
+            optimal_lag = min(lag_order_results, key=lag_order_results.get)
+        else:
+            optimal_lag = 1
+        
+        logger.log(f"VAR optimal lag order: {optimal_lag}")
+        
+        # Fit VAR model with optimal lag
+        model = var_model.fit(optimal_lag)
+        
+        # Forecast
+        forecast_steps = len(test_data)
+        forecast = model.forecast(train_data.values, steps=forecast_steps)
+        
+        # Extract target column forecast (first column)
+        target_forecast = forecast[:, 0]
+        
+        # Calculate RMSE
+        if len(test_data) > 0:
+            rmse = np.sqrt(mean_squared_error(test_data[target_col], target_forecast))
+        else:
+            rmse = np.nan
+        
+        # Create forecast Series aligned with test data
+        forecast_index = df[train_size:train_size+len(target_forecast)].index
+        forecast_series = pd.Series(target_forecast, index=forecast_index)
+        
+        # Generate forecast variance for confidence intervals
+        forecast_var = model.forecast_interval(train_data.values, steps=forecast_steps)[1]
+        target_std = np.sqrt(forecast_var[:, 0, 0])
+        
+        # Create bounds
+        z_value = 1.96  # 95% confidence interval
+        lower_bound = pd.Series(target_forecast - z_value * target_std, index=forecast_index)
+        upper_bound = pd.Series(target_forecast + z_value * target_std, index=forecast_index)
+        
+        # Create result
+        result = {
+            'forecast': forecast_series,
+            'lower_bound': lower_bound,
+            'upper_bound': upper_bound,
+            'rmse': rmse,
+            'optimal_lag': optimal_lag
+        }
+        
+        logger.log(f"VAR model completed with RMSE: {rmse:.4f}")
+        return result
+        
+    except Exception as e:
+        logger.log(f"VAR Error: {str(e)}")
+        # Create a placeholder result
+        placeholder_result = {
+            'forecast': pd.Series([np.nan] * len(df[train_size:]), index=df[train_size:].index),
+            'lower_bound': pd.Series([np.nan] * len(df[train_size:]), index=df[train_size:].index),
+            'upper_bound': pd.Series([np.nan] * len(df[train_size:]), index=df[train_size:].index),
+            'rmse': np.nan
+        }
+        return placeholder_result
+
+# Enhanced Hybrid Model with Dynamic Weighting
+def implement_hybrid_model(df, train_size, model_results):
+    """Implement hybrid model with dynamic weighting based on recent performance"""
+    logger.log("Implementing hybrid model with dynamic weighting")
+    
+    try:
+        # Filter out models with NaN forecasts or errors
+        valid_models = {}
+        for model_name, result in model_results.items():
+            if (not result['forecast'].isna().all() and 
+                not np.isnan(result['rmse']) and 
+                result['rmse'] > 0):
+                valid_models[model_name] = result
+        
+        if not valid_models:
+            logger.log("No valid models available for hybrid approach")
+            # Return placeholder result
+            placeholder_result = {
+                'forecast': pd.Series([np.nan] * len(df[train_size:]), index=df[train_size:].index),
+                'lower_bound': pd.Series([np.nan] * len(df[train_size:]), index=df[train_size:].index),
+                'upper_bound': pd.Series([np.nan] * len(df[train_size:]), index=df[train_size:].index),
+                'rmse': np.nan,
+                'weights': {}
+            }
+            return placeholder_result
+        
+        # Get weighting strategy from config
+        weight_strategy = CONFIG['hybrid']['weight_strategy']
+        
+        if weight_strategy == 'equal':
+            # Equal weighting
+            weights = {model: 1.0 / len(valid_models) for model in valid_models}
+            
+        elif weight_strategy == 'adaptive':
+            # Adaptive weighting based on RMSE
+            # Lower RMSE = Higher weight
+            total_inv_rmse = sum(1.0 / result['rmse'] for result in valid_models.values())
+            weights = {model: (1.0 / result['rmse']) / total_inv_rmse 
+                      for model, result in valid_models.items()}
+            
+        else:
+            # Default to equal weights
+            weights = {model: 1.0 / len(valid_models) for model in valid_models}
+        
+        logger.log(f"Hybrid model weights: {weights}")
+        
+        # Create weighted forecast
+        forecast_index = df[train_size:].index
+        weighted_forecast = pd.Series(0.0, index=forecast_index)
+        weighted_lower = pd.Series(0.0, index=forecast_index)
+        weighted_upper = pd.Series(0.0, index=forecast_index)
+        
+        for model, weight in weights.items():
+            result = valid_models[model]
+            
+            # Ensure forecasts align with index
+            model_forecast = result['forecast']
+            model_lower = result['lower_bound']
+            model_upper = result['upper_bound']
+            
+            # Reindex to match forecast_index if needed
+            if not model_forecast.index.equals(forecast_index):
+                model_forecast = model_forecast.reindex(forecast_index, method='nearest')
+                model_lower = model_lower.reindex(forecast_index, method='nearest')
+                model_upper = model_upper.reindex(forecast_index, method='nearest')
+            
+            # Add weighted contribution
+            weighted_forecast += model_forecast * weight
+            weighted_lower += model_lower * weight
+            weighted_upper += model_upper * weight
+        
+        # Calculate RMSE if test data is available
+        y_test = df['HEALTHCARE_DEMAND'][train_size:]
+        if len(y_test) > 0:
+            rmse = np.sqrt(mean_squared_error(y_test, weighted_forecast))
+        else:
+            rmse = np.nan
+        
+        # Create result
+        result = {
+            'forecast': weighted_forecast,
+            'lower_bound': weighted_lower,
+            'upper_bound': weighted_upper,
+            'rmse': rmse,
+            'weights': weights
+        }
+        
+        logger.log(f"Hybrid model completed with RMSE: {rmse:.4f}")
+        return result
+        
+    except Exception as e:
+        logger.log(f"Hybrid Model Error: {str(e)}")
+        # Create a placeholder result
+        placeholder_result = {
+            'forecast': pd.Series([np.nan] * len(df[train_size:]), index=df[train_size:].index),
+            'lower_bound': pd.Series([np.nan] * len(df[train_size:]), index=df[train_size:].index),
+            'upper_bound': pd.Series([np.nan] * len(df[train_size:]), index=df[train_size:].index),
+            'rmse': np.nan,
+            'weights': {}
+        }
+        return placeholder_result
+
+# Generate Forecasts and Model Evaluations
+def run_forecasting_models(df, train_size=None, models_to_run=None):
+    """Run all selected forecasting models and generate forecasts"""
+    
+    logger.log("Running forecasting models")
+    
+    # Set default train size if not provided
+    if train_size is None:
+        train_size = int(len(df) * CONFIG['forecast']['train_test_split'])
+    
+    # Set default models to run if not provided
+    if models_to_run is None:
+        models_to_run = CONFIG['models']['enabled_models']
+    
+    # Setup time series cross-validation if enabled
+    cv_folds = None
+    if CONFIG['evaluation']['use_time_series_cv']:
+        n_splits = CONFIG['evaluation']['time_series_cv_splits']
+        cv_folds = TimeSeriesSplit(n_splits=n_splits)
+    
+    # Dictionary to store results
+    model_results = {}
+    
+    # Run SARIMA model if enabled
+    if 'sarima' in models_to_run:
+        logger.log("Running SARIMA model")
+        model_results['sarima'] = implement_sarima(df, train_size)
+    
+    # Run LSTM model if enabled
+    if 'lstm' in models_to_run:
+        logger.log("Running LSTM model")
+        model_results['lstm'] = implement_lstm(df, train_size)
+    
+    # Run Random Forest model if enabled
+    if 'rf' in models_to_run:
+        logger.log("Running Random Forest model")
+        model_results['rf'] = implement_random_forest(df, train_size, cv_folds)
+    
+    # Run XGBoost model if enabled
+    if 'xgboost' in models_to_run:
+        logger.log("Running XGBoost model")
+        model_results['xgboost'] = implement_xgboost(df, train_size, cv_folds)
+    
+    # Run VAR model if enabled
+    if 'var' in models_to_run:
+        logger.log("Running VAR model")
+        model_results['var'] = implement_var(df, train_size)
+    
+    # Run Prophet model if enabled
+    if 'prophet' in models_to_run:
+        logger.log("Running Prophet model")
+        model_results['prophet'] = implement_prophet(df, train_size)
+    
+    # Run hybrid model if enabled and we have at least 2 valid models
+    valid_models = sum(1 for result in model_results.values() 
+                      if not np.isnan(result['rmse']) and result['rmse'] > 0)
+    
+    if 'hybrid' in models_to_run and valid_models >= 2:
+        logger.log("Running hybrid model")
+        model_results['hybrid'] = implement_hybrid_model(df, train_size, model_results)
+    
+    return model_results
+
+# Visualization Functions
+def create_forecast_visualizations(df, model_results, forecast_days=30):
+    """Create and save visualizations for model forecasts"""
+    logger.log("Creating forecast visualizations")
+    
+    try:
+        # Create directory for figures if it doesn't exist
+        os.makedirs(CONFIG['output']['fig_dir'], exist_ok=True)
+        
+        # Prepare data for plotting
+        actuals = df['HEALTHCARE_DEMAND']
+        
+        # 1. Plot individual model forecasts
+        for model_name, result in model_results.items():
+            if result['forecast'].isna().all():
+                continue
+                
+            plt.figure(figsize=(12, 6))
+            
+            # Plot actual values
+            plt.plot(actuals.index, actuals, label='Actual', color='black')
+            
+            # Plot forecast
+            forecast = result['forecast']
+            plt.plot(forecast.index, forecast, label=f'{model_name.upper()} Forecast', 
+                    color='blue', linestyle='--')
+            
+            # Plot confidence intervals
+            plt.fill_between(forecast.index, 
+                           result['lower_bound'], 
+                           result['upper_bound'],
+                           alpha=0.2, color='blue',
+                           label='95% Confidence Interval')
+            
+            # Format plot
+            plt.title(f'{model_name.upper()} Model Forecast', fontsize=16)
+            plt.xlabel('Date', fontsize=12)
+            plt.ylabel('Healthcare Demand', fontsize=12)
+            plt.legend()
+            plt.grid(True, alpha=0.3)
+            plt.tight_layout()
+            
+            # Save figure
+            plt.savefig(os.path.join(CONFIG['output']['fig_dir'], f'{model_name}_forecast.png'), 
+                       dpi=300, bbox_inches='tight')
+            plt.close()
+        
+        # 2. Plot model comparison
+        plt.figure(figsize=(15, 8))
+        
+        # Plot actual values
+        plt.plot(actuals.index, actuals, label='Actual', color='black', linewidth=2)
+        
+        # Define colors for different models
+        colors = ['blue', 'red', 'green', 'purple', 'orange', 'cyan', 'magenta']
+        color_idx = 0
+        
+        # Plot each model's forecast
+        for model_name, result in model_results.items():
+            if result['forecast'].isna().all():
+                continue
+                
+            forecast = result['forecast']
+            plt.plot(forecast.index, forecast, 
+                   label=f'{model_name.upper()}', 
+                   color=colors[color_idx % len(colors)],
+                   linestyle='--')
+            color_idx += 1
+        
+        # Format plot
+        plt.title('Model Comparison', fontsize=16)
+        plt.xlabel('Date', fontsize=12)
+        plt.ylabel('Healthcare Demand', fontsize=12)
+        plt.legend()
+        plt.grid(True, alpha=0.3)
+        plt.tight_layout()
+        
+        # Save figure
+        plt.savefig(os.path.join(CONFIG['output']['fig_dir'], 'model_comparison.png'), 
+                   dpi=300, bbox_inches='tight')
+        plt.close()
+        
+        # 3. Plot RMSE comparison
+        valid_models = {model: result for model, result in model_results.items() 
+                      if not np.isnan(result['rmse'])}
+        
+        if valid_models:
+            plt.figure(figsize=(10, 6))
+            
+            model_names = list(valid_models.keys())
+            rmse_values = [result['rmse'] for result in valid_models.values()]
+            
+            # Sort by RMSE
+            sorted_indices = np.argsort(rmse_values)
+            sorted_models = [model_names[i] for i in sorted_indices]
+            sorted_rmse = [rmse_values[i] for i in sorted_indices]
+            
+            # Create bar chart
+            bars = plt.bar(sorted_models, sorted_rmse, color='skyblue')
+            
+            # Add value labels on top of bars
+            for bar, rmse in zip(bars, sorted_rmse):
+                plt.text(bar.get_x() + bar.get_width()/2, 
+                       bar.get_height() + 0.05,
+                       f'{rmse:.2f}', 
+                       ha='center', va='bottom', fontsize=10)
+            
+            # Format plot
+            plt.title('Model RMSE Comparison (Lower is Better)', fontsize=16)
+            plt.ylabel('RMSE', fontsize=12)
+            plt.xticks(rotation=45)
+            plt.grid(True, alpha=0.3, axis='y')
+            plt.tight_layout()
+            
+            # Save figure
+            plt.savefig(os.path.join(CONFIG['output']['fig_dir'], 'rmse_comparison.png'), 
+                       dpi=300, bbox_inches='tight')
+            plt.close()
+        
+        # 4. Plot future forecast (if hybrid model is available)
+        if 'hybrid' in model_results and not model_results['hybrid']['forecast'].isna().all():
+            result = model_results['hybrid']
+            forecast = result['forecast']
+            
+            plt.figure(figsize=(12, 6))
+            
+            # Plot historical actuals
+            plt.plot(actuals.index, actuals, label='Historical Data', color='black')
+            
+            # Plot forecast
+            plt.plot(forecast.index, forecast, label='Forecast', color='red', linestyle='--')
+            
+            # Plot confidence intervals
+            plt.fill_between(forecast.index, 
+                           result['lower_bound'], 
+                           result['upper_bound'],
+                           alpha=0.2, color='red',
+                           label='95% Confidence Interval')
+            
+            # Format plot
+            plt.title('Healthcare Demand Forecast', fontsize=16)
+            plt.xlabel('Date', fontsize=12)
+            plt.ylabel('Healthcare Demand', fontsize=12)
+            plt.legend()
+            plt.grid(True, alpha=0.3)
+            plt.tight_layout()
+            
+            # Save figure
+            plt.savefig(os.path.join(CONFIG['output']['fig_dir'], 'future_forecast.png'), 
+                       dpi=300, bbox_inches='tight')
+            plt.close()
+            
+            # 5. Create forecast heatmap by day of week and hour
+            if isinstance(forecast.index, pd.DatetimeIndex) and len(forecast) >= 7:
+                try:
+                    # Create day of week and hour matrix
+                    forecast_df = pd.DataFrame({
+                        'demand': forecast,
+                        'dow': forecast.index.dayofweek,
+                        'hour': forecast.index.hour if forecast.index.inferred_freq == 'H' else 0
+                    })
+                    
+                    # If we have hourly data
+                    if forecast.index.inferred_freq == 'H':
+                        pivot = forecast_df.pivot_table(
+                            values='demand', 
+                            index='dow', 
+                            columns='hour', 
+                            aggfunc='mean'
+                        )
+                        
+                        plt.figure(figsize=(14, 8))
+                        sns.heatmap(pivot, cmap='YlOrRd', annot=True, fmt='.1f')
+                        plt.title('Forecast Demand by Day and Hour', fontsize=16)
+                        plt.xlabel('Hour of Day', fontsize=12)
+                        plt.ylabel('Day of Week (0=Monday)', fontsize=12)
+                        plt.tight_layout()
+                        
+                        # Save figure
+                        plt.savefig(os.path.join(CONFIG['output']['fig_dir'], 'forecast_heatmap.png'), 
+                                   dpi=300, bbox_inches='tight')
+                        plt.close()
+                    
+                    # If we have daily data
+                    else:
+                        day_names = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+                        dow_means = forecast_df.groupby('dow')['demand'].mean()
+                        
+                        plt.figure(figsize=(10, 6))
+                        plt.bar(range(7), [dow_means.get(i, 0) for i in range(7)])
+                        plt.xticks(range(7), day_names, rotation=45)
+                        plt.title('Average Forecast Demand by Day of Week', fontsize=16)
+                        plt.ylabel('Average Demand', fontsize=12)
+                        plt.grid(True, alpha=0.3, axis='y')
+                        plt.tight_layout()
+                        
+                        # Save figure
+                        plt.savefig(os.path.join(CONFIG['output']['fig_dir'], 'dow_forecast.png'), 
+                                   dpi=300, bbox_inches='tight')
+                        plt.close()
+                        
+                except Exception as e:
+                    logger.log(f"Error creating time-based visualizations: {str(e)}")
+        
+        logger.log("Forecast visualizations created successfully")
+        
+    except Exception as e:
+        logger.log(f"Error in create_forecast_visualizations: {str(e)}")
+
+# Alert System
+def generate_alerts(df, model_results, alert_threshold=None):
+    """Generate alerts for abnormal healthcare demand forecasts"""
+    logger.log("Generating demand alerts")
+    
+    try:
+        # Set default threshold if not provided
+        if alert_threshold is None:
+            # Use percentile of historical data
+            historical_demand = df['HEALTHCARE_DEMAND']
+            alert_threshold = np.percentile(historical_demand, CONFIG['alerts']['percentile_threshold'])
+        
+        # Use hybrid model if available, otherwise best performing model
+        if 'hybrid' in model_results and not model_results['hybrid']['forecast'].isna().all():
+            forecast = model_results['hybrid']['forecast']
+        else:
+            # Find best model (lowest RMSE)
+            best_model = None
+            best_rmse = float('inf')
+            
+            for model_name, result in model_results.items():
+                if not np.isnan(result['rmse']) and result['rmse'] < best_rmse:
+                    best_rmse = result['rmse']
+                    best_model = model_name
+            
+            if best_model:
+                forecast = model_results[best_model]['forecast']
+            else:
+                logger.log("No valid models for alert generation")
+                return []
+        
+        # Generate alerts for forecasts exceeding threshold
+        alerts = []
+        
+        for date, value in forecast.items():
+            if value > alert_threshold:
+                alerts.append({
+                    'date': date,
+                    'forecast_value': value,
+                    'threshold': alert_threshold,
+                    'percent_above': ((value - alert_threshold) / alert_threshold) * 100
+                })
+        
+        # Sort alerts by severity (percent above threshold)
+        alerts.sort(key=lambda x: x['percent_above'], reverse=True)
+        
+        # Save alerts to file
+        if alerts and CONFIG['output']['save_alerts']:
+            alert_file = os.path.join(CONFIG['output']['output_dir'], 'demand_alerts.json')
+            with open(alert_file, 'w') as f:
+                json.dump(alerts, f, indent=4, default=str)
+            logger.log(f"Alerts saved to {alert_file}")
+        
+        logger.log(f"Generated {len(alerts)} demand alerts")
+        return alerts
+        
+    except Exception as e:
+        logger.log(f"Error in generate_alerts: {str(e)}")
+        return []
+
+# Generate Comprehensive Report
+def generate_report(df, model_results, alerts=None):
+    """Generate a comprehensive markdown report of analysis and forecasts"""
+    logger.log("Generating comprehensive report")
+    
+    try:
+        # Create output directory if it doesn't exist
+        os.makedirs(CONFIG['output']['output_dir'], exist_ok=True)
+        
+        # Start building the report
+        report = []
+        
+        # Add header
+        report.append("# Healthcare Demand Forecasting Report")
+        report.append(f"*Generated on {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}*\n")
+        
+        # Add executive summary
+        report.append("## Executive Summary")
+        
+        # Find best model
+        best_model = None
+        best_rmse = float('inf')
+        
+        for model_name, result in model_results.items():
+            if not np.isnan(result['rmse']) and result['rmse'] < best_rmse:
+                best_rmse = result['rmse']
+                best_model = model_name
+        
+        # Summary text
+        report.append(f"This report presents the results of healthcare demand forecasting based on Social Determinants of Health (SDoH) factors. The analysis leveraged multiple forecasting methods to predict healthcare demand patterns.")
+        
+        if best_model:
+            report.append(f"\n**Best Performing Model:** {best_model.upper()} (RMSE: {best_rmse:.4f})")
+        
+        if 'hybrid' in model_results and not np.isnan(model_results['hybrid']['rmse']):
+            hybrid_rmse = model_results['hybrid']['rmse']
+            report.append(f"\n**Hybrid Model Performance:** RMSE: {hybrid_rmse:.4f}")
+            
+            # Hybrid model weights
+            if 'weights' in model_results['hybrid']:
+                weights = model_results['hybrid']['weights']
+                if weights:
+                    report.append("\n**Hybrid Model Weights:**")
+                    for model, weight in weights.items():
+                        report.append(f"- {model.upper()}: {weight:.4f}")
+        
+        # Add alert summary if available
+        if alerts:
+            critical_alerts = sum(1 for alert in alerts if alert['percent_above'] > 20)
+            report.append(f"\n**Alerts:** {len(alerts)} total alerts, {critical_alerts} critical alerts (>20% above threshold)")
+        
+        # Add data summary
+        report.append("\n## Data Summary")
+        report.append(f"- **Date Range:** {df.index.min().strftime('%Y-%m-%d')} to {df.index.max().strftime('%Y-%m-%d')}")
+        report.append(f"- **Total Records:** {len(df)}")
+        report.append(f"- **Average Healthcare Demand:** {df['HEALTHCARE_DEMAND'].mean():.2f}")
+        report.append(f"- **Maximum Healthcare Demand:** {df['HEALTHCARE_DEMAND'].max():.2f}")
+        
+        # List included features
+        features = [col for col in df.columns if col != 'HEALTHCARE_DEMAND']
+        report.append("\n**SDoH Features Included:**")
+        for feature in features:
+            report.append(f"- {feature}")
+        
+        # Add model comparison
+        report.append("\n## Model Comparison")
+        report.append("\n| Model | RMSE | MAE |")
+        report.append("| ----- | ---- | --- |")
+        
+        for model_name, result in model_results.items():
+            if not np.isnan(result['rmse']):
+                # Calculate MAE if not already available
+                if 'mae' not in result:
+                    try:
+                        y_test = df['HEALTHCARE_DEMAND'][result['forecast'].index]
+                        mae = mean_absolute_error(y_test, result['forecast'])
+                    except:
+                        mae = np.nan
+                else:
+                    mae = result['mae']
+                
+                report.append(f"| {model_name.upper()} | {result['rmse']:.4f} | {mae:.4f} |")
+        
+        # Add forecast visualizations
+        report.append("\n## Forecast Visualizations")
+        report.append("\n### Model Comparison")
+        report.append(f"\n![Model Comparison](./figures/model_comparison.png)")
+        
+        report.append("\n### RMSE Comparison")
+        report.append(f"\n![RMSE Comparison](./figures/rmse_comparison.png)")
+        
+        if 'hybrid' in model_results and not model_results['hybrid']['forecast'].isna().all():
+            report.append("\n### Hybrid Model Forecast")
+            report.append(f"\n![Hybrid Forecast](./figures/future_forecast.png)")
+        
+        # Add feature importance if available
+        has_feature_importance = False
+        
+        for model_name, result in model_results.items():
+            if 'feature_importance' in result and result['feature_importance']:
+                has_feature_importance = True
+                break
+        
+        if has_feature_importance:
+            report.append("\n## Feature Importance Analysis")
+            
+            for model_name, result in model_results.items():
+                if 'feature_importance' in result and result['feature_importance']:
+                    report.append(f"\n### {model_name.upper()} Feature Importance")
+                    
+                    if isinstance(result['feature_importance'], dict):
+                        # Sort features by importance
+                        sorted_features = sorted(
+                            result['feature_importance'].items(), 
+                            key=lambda x: x[1], 
+                            reverse=True
+                        )
+                        
+                        report.append("\n| Feature | Importance |")
+                        report.append("| ------- | ---------- |")
+                        
+                        for feature, importance in sorted_features:
+                            report.append(f"| {feature} | {importance:.4f} |")
+                    
+                    # Add feature importance plot if available
+                    report.append(f"\n![{model_name.upper()} Feature Importance](./figures/{model_name}_feature_importance.png)")
+        
+        # Add alert details if available
+        if alerts:
+            report.append("\n## Demand Alerts")
+            report.append("\nThe following dates are forecasted to have abnormally high healthcare demand:")
+            
+            report.append("\n| Date | Forecast | Threshold | % Above Threshold |")
+            report.append("| ---- | -------- | --------- | ----------------- |")
+            
+            for alert in alerts[:10]:  # Show top 10 alerts
+                date_str = alert['date'].strftime('%Y-%m-%d')
+                report.append(f"| {date_str} | {alert['forecast_value']:.2f} | {alert['threshold']:.2f} | {alert['percent_above']:.2f}% |")
+            
+            if len(alerts) > 10:
+                report.append(f"\n*{len(alerts) - 10} additional alerts not shown*")
+        
+        # Add recommendations
+        report.append("\n## Recommendations")
+        
+        # Add general recommendations
+        report.append("\n### Resource Planning")
+        report.append("1. **Staffing Adjustments:** Consider increasing staffing levels during forecasted high-demand periods.")
+        report.append("2. **Capacity Planning:** Ensure sufficient bed capacity and equipment availability for peak demand periods.")
+        report.append("3. **Supply Chain:** Increase inventory of critical supplies before anticipated demand surges.")
+        
+        # Add SDoH-specific recommendations if we have feature importance
+        if has_feature_importance:
+            report.append("\n### SDoH Interventions")
+            
+            # Get top features from best performing model with feature importance
+            top_features = []
+            
+            for model_name, result in model_results.items():
+                if 'feature_importance' in result and result['feature_importance'] and (best_model is None or model_name == best_model):
+                    sorted_features = sorted(
+                        result['feature_importance'].items(), 
+                        key=lambda x: x[1], 
+                        reverse=True
+                    )
+                    top_features = [f[0] for f in sorted_features[:3]]
+                    break
+            
+            if top_features:
+                report.append("Based on the analysis, focus on these key social determinants:")
+                
+                for feature in top_features:
+                    report.append(f"- **{feature}:** Develop targeted interventions to address this factor.")
+            
+        # Add methodology details
+        report.append("\n## Methodology")
+        report.append("\nThis analysis used a multi-model approach to forecast healthcare demand based on SDoH factors:")
+        
+        # List models used
+        for model_name in model_results.keys():
+            if model_name == 'lstm':
+                report.append("- **LSTM (Long Short-Term Memory):** Deep learning model for sequence prediction")
+            elif model_name == 'rf':
+                report.append("- **Random Forest:** Ensemble of decision trees for regression")
+            elif model_name == 'xgboost':
+                report.append("- **XGBoost:** Gradient boosting algorithm for structured data")
+            elif model_name == 'var':
+                report.append("- **VAR (Vector Autoregression):** Multivariate time series forecasting model")
+            elif model_name == 'prophet':
+                report.append("- **Prophet:** Facebook's time series forecasting model handling seasonality")
+            elif model_name == 'sarima':
+                report.append("- **SARIMA:** Statistical model for seasonal time series")
+            elif model_name == 'hybrid':
+                report.append("- **Hybrid Model:** Weighted ensemble of all other models")
+        
+        # Write the report to file
+        report_path = os.path.join(CONFIG['output']['output_dir'], 'healthcare_demand_report.md')
+        with open(report_path, 'w') as f:
+            f.write('\n'.join(report))
+        
+        logger.log(f"Report generated and saved to {report_path}")
+        return '\n'.join(report)
+        
+    except Exception as e:
+        logger.log(f"Error in generate_report: {str(e)}")
+        return None
+
+# Main function to run the entire pipeline
+def main():
+    """Main function to run the entire healthcare demand forecasting pipeline"""
+    logger.log("Starting healthcare demand forecasting pipeline")
+    
+    try:
+        # Create output directories
+        for dir_path in [CONFIG['output']['output_dir'], 
+                         CONFIG['output']['fig_dir'], 
+                         CONFIG['output']['model_dir']]:
+            os.makedirs(dir_path, exist_ok=True)
+        
+        # Check for train_test_split key
+        if 'train_test_split' not in CONFIG['data']:
+            logger.log("train_test_split key is missing from the configuration.")
+            return
+        
+        # 1. Load and preprocess data
+        df, df_numeric = load_and_preprocess_data(CONFIG['input']['data_path'])  # Ensure both DataFrames are returned
+        
+        if df is None or len(df) == 0:
+            logger.log("No data available after preprocessing")
+            return
+        
+        # 2. Perform exploratory data analysis
+        perform_eda(df, df_numeric)  # Pass both DataFrames to the EDA function
+        
+        # 3. Set train/test split
+        train_size = int(len(df) * CONFIG['data']['train_test_split'])
+        
+        # 4. Run forecasting models
+        model_results = run_forecasting_models(df, train_size)
+        
+        # 5. Create visualizations
+        create_forecast_visualizations(df, model_results)
+        
+        # 6. Generate alerts
+        alerts = generate_alerts(df, model_results)
+        
+        # 7. Generate report
+        report = generate_report(df, model_results, alerts)
+        
+        logger.log("Healthcare demand forecasting pipeline completed successfully")
+        
+    except Exception as e:
+        logger.log(f"Error in main: {str(e)}")
+
+if __name__ == "__main__":
+    main()
