@@ -63,3 +63,6 @@ This project is licensed under the MIT License. See the LICENSE file for details
 * [Chart.js](https://www.chartjs.org/) for charting capabilities.
 * [TopoJSON](https://github.com/topojson/topojson) for geographic data representation.
 * [Font Awesome](https://fontawesome.com/) for icons.
+
+## Backend
+
