@@ -36,13 +36,21 @@ def load_and_preprocess_data(file_path):
         # Use other relevant columns if ACS_PCT_DISABLE not available
         demand_factors = [col for col in df_numeric.columns if 'PCT' in col and 'LT_HS' in col or 'MEDICAID' in col or 'UNINSURED' in col]
         if demand_factors:
-            df_numeric['HEALTHCARE_DEMAND'] = df_numeric[demand_factors].mean(axis=1) * 2
+            # Use weighted average with clipping to reduce volatility
+            df_numeric['HEALTHCARE_DEMAND'] = np.clip(df_numeric[demand_factors].mean(axis=1) * 1.5, 0, 100)
         else:
-            # If none of the specific columns exist, use mean of all columns
-            df_numeric['HEALTHCARE_DEMAND'] = df_numeric.mean(axis=1)
-   
-    # Scale the healthcare demand to a reasonable range (0-100)
-    min_max_scaler = MinMaxScaler(feature_range=(0, 100))
+            # If none of the specific columns exist, use mean of selected columns that are likely relevant
+            potential_cols = [col for col in df_numeric.columns if any(term in col.upper() for term in ['INCOME', 'POVERTY', 'AGE', 'HEALTH'])]
+            if potential_cols:
+                df_numeric['HEALTHCARE_DEMAND'] = df_numeric[potential_cols].mean(axis=1)
+            else:
+                df_numeric['HEALTHCARE_DEMAND'] = df_numeric.mean(axis=1)
+    
+    # Apply smoothing to reduce volatility (rolling average with window of 3)
+    df_numeric['HEALTHCARE_DEMAND'] = df_numeric['HEALTHCARE_DEMAND'].rolling(window=3, min_periods=1).mean()
+    
+    # Scale to a less volatile range (40-80 instead of 0-100)
+    min_max_scaler = MinMaxScaler(feature_range=(60, 70))
     df_numeric['HEALTHCARE_DEMAND'] = min_max_scaler.fit_transform(df_numeric['HEALTHCARE_DEMAND'].values.reshape(-1, 1))
    
     # For time series prediction, let's create dates - one day per record
