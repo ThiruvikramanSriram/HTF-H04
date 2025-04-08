@@ -636,7 +636,7 @@ def implement_lstm(df, train_size, look_back=None):
             patience=10,
             restore_best_weights=True
         )
-        
+
         # Build LSTM model
         model = Sequential()
         model.add(LSTM(lstm_units[0], return_sequences=len(lstm_units) > 1, 
