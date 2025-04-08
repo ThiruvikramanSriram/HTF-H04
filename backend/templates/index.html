@@ -1,0 +1,1017 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MedSetra - Emergency Healthcare Prediction System</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <style>
+        :root {
+            --primary: #1a56db;
+            --primary-dark: #1e429f;
+            --primary-light: #3b82f6;
+            --primary-lightest: #dbeafe;
+            --secondary: #0ea5e9;
+            --accent: #0284c7;
+            --light: #f8fafc;
+            --dark: #1e293b;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --gray-light: #f1f5f9;
+            --gray: #94a3b8;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Poppins', sans-serif;
+            background-color: var(--light);
+            color: var(--dark);
+            line-height: 1.6;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+        }
+        
+        /* Header Styles */
+        header {
+            background-color: var(--primary);
+            color: white;
+            padding: 1rem 0;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+        
+        .navbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .logo {
+            display: flex;
+            align-items: center;
+            font-size: 1.5rem;
+            font-weight: 700;
+        }
+        
+        .logo i {
+            margin-right: 10px;
+            font-size: 1.75rem;
+        }
+        
+        /* Main Content Styles */
+        main {
+            padding: 2rem 0;
+        }
+        
+        .card {
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+        
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+        
+        .card-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: var(--primary-dark);
+        }
+        
+        /* Form Styles */
+        .form-group {
+            margin-bottom: 1rem;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+        }
+        
+        select, input {
+            width: 100%;
+            padding: 0.75rem;
+            border: 1px solid var(--gray);
+            border-radius: 4px;
+            font-family: inherit;
+            font-size: 1rem;
+        }
+        
+        select:focus, input:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.25);
+        }
+        
+        .btn {
+            display: inline-block;
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 4px;
+            background-color: var(--primary);
+            color: white;
+            font-size: 1rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+        
+        .btn:hover {
+            background-color: var(--primary-dark);
+        }
+        
+        .btn:disabled {
+            background-color: var(--gray);
+            cursor: not-allowed;
+        }
+        
+        /* Dashboard Styles */
+        .dashboard {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+            gap: 1.5rem;
+            margin-top: 1.5rem;
+        }
+        
+        .chart-container {
+            position: relative;
+            height: 300px;
+            width: 100%;
+        }
+        
+        .metrics {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+        
+        .metric-card {
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            padding: 1rem;
+            text-align: center;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+        
+        .metric-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+        }
+        
+        .metric-value {
+            font-size: 1.75rem;
+            font-weight: 700;
+            color: var(--primary);
+            margin: 0.5rem 0;
+        }
+        
+        .metric-title {
+            color: var(--gray);
+            font-size: 0.9rem;
+            font-weight: 500;
+        }
+        
+        /* Loading Spinner */
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 2rem;
+        }
+        
+        .spinner {
+            display: inline-block;
+            width: 40px;
+            height: 40px;
+            border: 4px solid rgba(59, 130, 246, 0.25);
+            border-radius: 50%;
+            border-top-color: var(--primary);
+            animation: spin 1s ease-in-out infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        /* Alert Styles */
+        .alert {
+            padding: 1rem;
+            border-radius: 4px;
+            margin-bottom: 1rem;
+            display: none;
+        }
+        
+        .alert-danger {
+            background-color: #fee2e2;
+            color: #b91c1c;
+            border: 1px solid #f87171;
+        }
+        
+        /* Responsive Styles */
+        @media (max-width: 768px) {
+            .dashboard {
+                grid-template-columns: 1fr;
+            }
+            
+            .metrics {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+        
+        @media (max-width: 480px) {
+            .metrics {
+                grid-template-columns: 1fr;
+            }
+        }
+        
+        /* Footer Styles */
+        footer {
+            background-color: var(--primary-dark);
+            color: white;
+            padding: 1.5rem 0;
+            text-align: center;
+            margin-top: 2rem;
+        }
+        
+        /* Tabs Styles */
+        .tabs {
+            display: flex;
+            margin-bottom: 1rem;
+            border-bottom: 1px solid var(--gray-light);
+        }
+        
+        .tab {
+            padding: 0.75rem 1.5rem;
+            cursor: pointer;
+            border-bottom: 3px solid transparent;
+            font-weight: 500;
+        }
+        
+        .tab.active {
+            border-bottom-color: var(--primary);
+            color: var(--primary);
+        }
+        
+        .tab-content {
+            display: none;
+        }
+        
+        .tab-content.active {
+            display: block;
+        }
+        
+        /* Summary box */
+        .summary-box {
+            background-color: var(--primary-lightest);
+            border-left: 4px solid var(--primary);
+            padding: 1rem;
+            margin-bottom: 1.5rem;
+            border-radius: 4px;
+        }
+        
+        .summary-title {
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            color: var(--primary-dark);
+        }
+        
+        .summary-text {
+            color: var(--dark);
+        }
+        
+        /* Help tooltip */
+        .tooltip {
+            position: relative;
+            display: inline-block;
+            margin-left: 5px;
+        }
+        
+        .tooltip .tooltip-icon {
+            color: var(--gray);
+            cursor: pointer;
+        }
+        
+        .tooltip .tooltip-text {
+            visibility: hidden;
+            width: 200px;
+            background-color: var(--dark);
+            color: white;
+            text-align: center;
+            border-radius: 6px;
+            padding: 8px;
+            position: absolute;
+            z-index: 1;
+            bottom: 125%;
+            left: 50%;
+            margin-left: -100px;
+            opacity: 0;
+            transition: opacity 0.3s;
+            font-size: 0.8rem;
+        }
+        
+        .tooltip:hover .tooltip-text {
+            visibility: visible;
+            opacity: 1;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="container">
+            <div class="navbar">
+                <div class="logo">
+                    <i class="fas fa-heartbeat"></i>
+                    <span>MedSetra</span>
+                </div>
+            </div>
+        </div>
+    </header>
+    
+    <main class="container">
+        <div class="card">
+            <div class="card-header">
+                <h2 class="card-title">Emergency Healthcare Prediction System</h2>
+            </div>
+            <div class="summary-box">
+                <h3 class="summary-title">About This Tool</h3>
+                <p class="summary-text">This system predicts emergency healthcare utilization metrics across different regions of India. Select a region to generate predictions for the next 30 days based on historical data and advanced machine learning models.</p>
+            </div>
+            
+            <div id="error-alert" class="alert alert-danger"></div>
+            
+            <form id="prediction-form">
+                <div class="form-group">
+                    <label for="region">Select Region:</label>
+                    <select id="region" name="region" required>
+                        <option value="North India">North India</option>
+                        <option value="South India">South India</option>
+                        <option value="East India">East India</option>
+                        <option value="West India">West India</option>
+                        <option value="Central India">Central India</option>
+                        <option value="Northeast India">Northeast India</option>
+                    </select>
+                </div>
+                
+                <button type="submit" class="btn" id="predict-btn">Generate Predictions</button>
+            </form>
+            
+            <div id="loading" class="loading">
+                <div class="spinner"></div>
+                <p>Generating predictions, please wait...</p>
+            </div>
+        </div>
+        
+        <div id="results" style="display: none;">
+            <div class="card">
+                <div class="card-header">
+                    <h2 class="card-title">Prediction Results for <span id="region-display"></span></h2>
+                </div>
+                
+                <div class="tabs">
+                    <div class="tab active" data-tab="overview">Overview</div>
+                    <div class="tab" data-tab="charts">Charts</div>
+                    <div class="tab" data-tab="data">Data Table</div>
+                </div>
+                
+                <div id="overview" class="tab-content active">
+                    <h3>Key Metrics (30-Day Average)</h3>
+                    <div class="metrics">
+                        <div class="metric-card">
+                            <div class="metric-title">Emergency Cases</div>
+                            <div class="metric-value" id="avg-emergency"></div>
+                            <div class="metric-trend"></div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="metric-title">Hospital Bed Utilization</div>
+                            <div class="metric-value" id="avg-beds"></div>
+                            <div class="metric-trend"></div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="metric-title">ICU Utilization</div>
+                            <div class="metric-value" id="avg-icu"></div>
+                            <div class="metric-trend"></div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="metric-title">Ambulance Utilization</div>
+                            <div class="metric-value" id="avg-ambulance"></div>
+                            <div class="metric-trend"></div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="metric-title">Staff Utilization</div>
+                            <div class="metric-value" id="avg-staff"></div>
+                            <div class="metric-trend"></div>
+                        </div>
+                        <div class="metric-card">
+                            <div class="metric-title">Medical Supplies Utilization</div>
+                            <div class="metric-value" id="avg-supplies"></div>
+                            <div class="metric-trend"></div>
+                        </div>
+                    </div>
+                    
+                    <div class="summary-box">
+                        <h3 class="summary-title">Prediction Summary</h3>
+                        <p class="summary-text" id="prediction-summary"></p>
+                    </div>
+                </div>
+                
+                <div id="charts" class="tab-content">
+                    <div class="dashboard">
+                        <div class="card">
+                            <h3>Emergency Cases</h3>
+                            <div class="chart-container">
+                                <canvas id="emergency-chart"></canvas>
+                            </div>
+                        </div>
+                        <div class="card">
+                            <h3>Hospital Bed Utilization (%)</h3>
+                            <div class="chart-container">
+                                <canvas id="beds-chart"></canvas>
+                            </div>
+                        </div>
+                        <div class="card">
+                            <h3>ICU Utilization (%)</h3>
+                            <div class="chart-container">
+                                <canvas id="icu-chart"></canvas>
+                            </div>
+                        </div>
+                        <div class="card">
+                            <h3>Ambulance Utilization (%)</h3>
+                            <div class="chart-container">
+                                <canvas id="ambulance-chart"></canvas>
+                            </div>
+                        </div>
+                        <div class="card">
+                            <h3>Emergency Staff Utilization (%)</h3>
+                            <div class="chart-container">
+                                <canvas id="staff-chart"></canvas>
+                            </div>
+                        </div>
+                        <div class="card">
+                            <h3>Medical Supplies Utilization (%)</h3>
+                            <div class="chart-container">
+                                <canvas id="supplies-chart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div id="data" class="tab-content">
+                    <div class="card">
+                        <h3>Predicted Data Table</h3>
+                        <div style="overflow-x: auto;">
+                            <table id="prediction-table" style="width: 100%; border-collapse: collapse; margin-top: 1rem;">
+                                <thead>
+                                    <tr style="background-color: var(--primary-lightest); text-align: left;">
+                                        <th style="padding: 0.75rem; border-bottom: 1px solid var(--gray-light);">Date</th>
+                                        <th style="padding: 0.75rem; border-bottom: 1px solid var(--gray-light);">Emergency Cases</th>
+                                        <th style="padding: 0.75rem; border-bottom: 1px solid var(--gray-light);">Hospital Beds (%)</th>
+                                        <th style="padding: 0.75rem; border-bottom: 1px solid var(--gray-light);">ICU (%)</th>
+                                        <th style="padding: 0.75rem; border-bottom: 1px solid var(--gray-light);">Ambulance (%)</th>
+                                        <th style="padding: 0.75rem; border-bottom: 1px solid var(--gray-light);">Staff (%)</th>
+                                        <th style="padding: 0.75rem; border-bottom: 1px solid var(--gray-light);">Supplies (%)</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="table-body">
+                                    <!-- Table data will be inserted here -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+    
+    <footer>
+        <div class="container">
+            <p>© 2025 MedSetra Emergency Healthcare Prediction System</p>
+        </div>
+    </footer>
+
+    <script>
+        // Chart objects to store references
+        const charts = {};
+        
+        // Function to initialize charts
+        function initializeCharts() {
+            const chartConfig = {
+                Emergency_Cases: {
+                    id: 'emergency-chart',
+                    label: 'Emergency Cases',
+                    color: 'rgba(26, 86, 219, 0.7)',
+                    borderColor: 'rgba(26, 86, 219, 1)'
+                },
+                Hospital_Bed_Utilization_Percentage: {
+                    id: 'beds-chart',
+                    label: 'Hospital Bed Utilization (%)',
+                    color: 'rgba(14, 165, 233, 0.7)',
+                    borderColor: 'rgba(14, 165, 233, 1)'
+                },
+                ICU_Utilization_Percentage: {
+                    id: 'icu-chart',
+                    label: 'ICU Utilization (%)',
+                    color: 'rgba(2, 132, 199, 0.7)',
+                    borderColor: 'rgba(2, 132, 199, 1)'
+                },
+                Ambulance_Utilization_Percentage: {
+                    id: 'ambulance-chart',
+                    label: 'Ambulance Utilization (%)',
+                    color: 'rgba(59, 130, 246, 0.7)',
+                    borderColor: 'rgba(59, 130, 246, 1)'
+                },
+                Emergency_Staff_Utilization_Percentage: {
+                    id: 'staff-chart',
+                    label: 'Staff Utilization (%)',
+                    color: 'rgba(96, 165, 250, 0.7)',
+                    borderColor: 'rgba(96, 165, 250, 1)'
+                },
+                Medical_Supplies_Utilization_Percentage: {
+                    id: 'supplies-chart',
+                    label: 'Medical Supplies Utilization (%)',
+                    color: 'rgba(147, 197, 253, 0.7)',
+                    borderColor: 'rgba(147, 197, 253, 1)'
+                }
+            };
+            
+            for (const [key, config] of Object.entries(chartConfig)) {
+                const ctx = document.getElementById(config.id).getContext('2d');
+                charts[key] = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: [],
+                        datasets: [{
+                            label: config.label,
+                            data: [],
+                            backgroundColor: config.color,
+                            borderColor: config.borderColor,
+                            borderWidth: 2,
+                            pointRadius: 3,
+                            pointBackgroundColor: config.borderColor,
+                            tension: 0.2,
+                            fill: true
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                display: false
+                            },
+                            tooltip: {
+                                mode: 'index',
+                                intersect: false,
+                                backgroundColor: 'rgba(30, 41, 59, 0.8)',
+                                padding: 10,
+                                cornerRadius: 4,
+                                titleFont: {
+                                    size: 14,
+                                    weight: 'bold'
+                                },
+                                bodyFont: {
+                                    size: 13
+                                },
+                                displayColors: false
+                            }
+                        },
+                        scales: {
+                            x: {
+                                grid: {
+                                    display: false
+                                },
+                                ticks: {
+                                    maxRotation: 45,
+                                    minRotation: 45
+                                }
+                            },
+                            y: {
+                                beginAtZero: key === 'Emergency_Cases' ? true : false,
+                                min: key !== 'Emergency_Cases' ? 0 : undefined,
+                                max: key !== 'Emergency_Cases' ? 100 : undefined,
+                                grid: {
+                                    color: 'rgba(0, 0, 0, 0.05)'
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+        }
+        
+        // Function to update charts with new data
+        function updateCharts(data) {
+            for (const [key, chartData] of Object.entries(data)) {
+                const chart = charts[key];
+                if (chart) {
+                    chart.data.labels = chartData.dates;
+                    chart.data.datasets[0].data = chartData.predictions;
+                    chart.update();
+                }
+            }
+        }
+        
+        // Function to calculate and display average metrics
+        function updateAverageMetrics(data) {
+            document.getElementById('avg-emergency').textContent = Math.round(calculateAverage(data.Emergency_Cases.predictions));
+            document.getElementById('avg-beds').textContent = calculateAverage(data.Hospital_Bed_Utilization_Percentage.predictions).toFixed(1) + '%';
+            document.getElementById('avg-icu').textContent = calculateAverage(data.ICU_Utilization_Percentage.predictions).toFixed(1) + '%';
+            document.getElementById('avg-ambulance').textContent = calculateAverage(data.Ambulance_Utilization_Percentage.predictions).toFixed(1) + '%';
+            document.getElementById('avg-staff').textContent = calculateAverage(data.Emergency_Staff_Utilization_Percentage.predictions).toFixed(1) + '%';
+            document.getElementById('avg-supplies').textContent = calculateAverage(data.Medical_Supplies_Utilization_Percentage.predictions).toFixed(1) + '%';
+        }
+        
+        // Function to calculate average of an array
+        function calculateAverage(array) {
+            return array.reduce((a, b) => a + b, 0) / array.length;
+        }
+        
+        // Function to generate prediction summary
+        function generateSummary(data, region) {
+            const emergencyAvg = calculateAverage(data.Emergency_Cases.predictions);
+            const icuAvg = calculateAverage(data.ICU_Utilization_Percentage.predictions);
+            const bedAvg = calculateAverage(data.Hospital_Bed_Utilization_Percentage.predictions);
+            
+            let riskLevel;
+            let recommendationText;
+            
+            if (icuAvg > 85) {
+                riskLevel = "HIGH";
+                recommendationText = "Critical resources are highly constrained. Immediate action required to expand capacity or implement surge protocols.";
+            } else if (icuAvg > 75) {
+                riskLevel = "MODERATE-HIGH";
+                recommendationText = "Resources are strained. Consider activating additional ICU capacity and optimizing patient flows.";
+            } else if (icuAvg > 65) {
+                riskLevel = "MODERATE";
+                recommendationText = "Monitor the situation closely and prepare contingency plans if utilization continues to increase.";
+            } else {
+                riskLevel = "LOW";
+                recommendationText = "Current resources appear adequate for predicted demand. Continue regular monitoring.";
+            }
+            
+            // Analyze trends
+            const firstWeekEmergency = data.Emergency_Cases.predictions.slice(0, 7);
+            const lastWeekEmergency = data.Emergency_Cases.predictions.slice(-7);
+            const firstWeekAvg = calculateAverage(firstWeekEmergency);
+            const lastWeekAvg = calculateAverage(lastWeekEmergency);
+            const percentChange = ((lastWeekAvg - firstWeekAvg) / firstWeekAvg) * 100;
+            
+            let trendText;
+            if (percentChange > 5) {
+                trendText = `Emergency cases are projected to increase by ${percentChange.toFixed(1)}% over the 30-day period.`;
+            } else if (percentChange < -5) {
+                trendText = `Emergency cases are projected to decrease by ${Math.abs(percentChange).toFixed(1)}% over the 30-day period.`;
+            } else {
+                trendText = "Emergency case volume is projected to remain relatively stable over the 30-day period.";
+            }
+            
+            return `For ${region}, the system predicts an average of ${Math.round(emergencyAvg)} daily emergency cases with ICU utilization averaging ${icuAvg.toFixed(1)}% and hospital bed utilization at ${bedAvg.toFixed(1)}%. Resource risk level: ${riskLevel}. ${trendText} ${recommendationText}`;
+        }
+        
+        // Function to populate data table
+        function populateTable(data) {
+            const tableBody = document.getElementById('table-body');
+            tableBody.innerHTML = '';
+            
+            // We'll use the dates from one of the metrics
+            const dates = data.Emergency_Cases.dates;
+            
+            for (let i = 0; i < dates.length; i++) {
+                const row = document.createElement('tr');
+                row.style.borderBottom = '1px solid var(--gray-light)';
+                
+                // Date cell
+                const dateCell = document.createElement('td');
+                dateCell.style.padding = '0.75rem';
+                dateCell.textContent = dates[i];
+                row.appendChild(dateCell);
+                
+                // Data cells for each metric
+                const metrics = [
+                    'Emergency_Cases',
+                    'Hospital_Bed_Utilization_Percentage',
+                    'ICU_Utilization_Percentage',
+                    'Ambulance_Utilization_Percentage',
+                    'Emergency_Staff_Utilization_Percentage',
+                    'Medical_Supplies_Utilization_Percentage'
+                ];
+                
+                metrics.forEach(metric => {
+                    const cell = document.createElement('td');
+                    cell.style.padding = '0.75rem';
+                    
+                    let value = data[metric].predictions[i];
+                    
+                    // Format the value
+                    if (metric === 'Emergency_Cases') {
+                        cell.textContent = Math.round(value);
+                    } else {
+                        cell.textContent = value.toFixed(1) + '%';
+                    }
+                    
+                    // Highlight high utilization
+                    if (metric.includes('Percentage') && value > 85) {
+                        cell.style.color = 'var(--danger)';
+                        cell.style.fontWeight = '600';
+                    } else if (metric.includes('Percentage') && value > 75) {
+                        cell.style.color = 'var(--warning)';
+                        cell.style.fontWeight = '600';
+                    }
+                    
+                    row.appendChild(cell);
+                });
+                
+                tableBody.appendChild(row);
+            }
+        }
+        
+        // Function to handle the form submission
+        document.getElementById('prediction-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const region = document.getElementById('region').value;
+            const predictBtn = document.getElementById('predict-btn');
+            const loadingDiv = document.getElementById('loading');
+            const resultsDiv = document.getElementById('results');
+            const errorAlert = document.getElementById('error-alert');
+            
+            // Update region display
+            document.getElementById('region-display').textContent = region;
+            
+            // Show loading spinner and disable button
+            loadingDiv.style.display = 'block';
+            predictBtn.disabled = true;
+            errorAlert.style.display = 'none';
+            resultsDiv.style.display = 'none';
+            
+            // Make the API request
+            fetch('/predict', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ region: region })
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+                return response.json();
+            })
+            .then(data => {
+                // Hide loading spinner
+                loadingDiv.style.display = 'none';
+                
+                // Update UI with the results
+                updateCharts(data);
+                updateAverageMetrics(data);
+                populateTable(data);
+                
+                // Generate and display summary
+                const summaryText = generateSummary(data, region);
+                document.getElementById('prediction-summary').textContent = summaryText;
+                
+                // Show results
+                resultsDiv.style.display = 'block';
+                
+                // Re-enable button
+                predictBtn.disabled = false;
+            })
+            .catch(error => {
+                // Hide loading spinner
+                loadingDiv.style.display = 'none';
+                
+                // Show error message
+                errorAlert.textContent = 'Error generating predictions. Please try again later.';
+                errorAlert.style.display = 'block';
+                
+                // Re-enable button
+                predictBtn.disabled = false;
+                
+                console.error('Error:', error);
+            });
+        });
+        
+        // Tab switching functionality
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.addEventListener('click', function() {
+                // Remove active class from all tabs
+                document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                
+                // Add active class to clicked tab
+                this.classList.add('active');
+                
+                // Show corresponding content
+                const tabName = this.getAttribute('data-tab');
+                document.getElementById(tabName).classList.add('active');
+            });
+        });
+        
+        // Initialize charts on page loa
+        // Initialize charts on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeCharts();
+            
+            // Generate mock data for demo purposes
+            function generateMockData() {
+                const region = document.getElementById('region').value;
+                const today = new Date();
+                const dates = [];
+                
+                // Generate 30 days of dates
+                for (let i = 0; i < 30; i++) {
+                    const date = new Date(today);
+                    date.setDate(today.getDate() + i);
+                    dates.push(date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }));
+                }
+                
+                // Generate mock values based on region
+                let baseEmergency, baseBed, baseICU, baseAmbulance, baseStaff, baseSupplies;
+                let trendFactor = 0;
+                
+                switch(region) {
+                    case 'North India':
+                        baseEmergency = 220;
+                        baseBed = 72;
+                        baseICU = 78;
+                        baseAmbulance = 75;
+                        baseStaff = 82;
+                        baseSupplies = 70;
+                        trendFactor = 0.15;
+                        break;
+                    case 'South India':
+                        baseEmergency = 180;
+                        baseBed = 68;
+                        baseICU = 72;
+                        baseAmbulance = 70;
+                        baseStaff = 75;
+                        baseSupplies = 68;
+                        trendFactor = -0.1;
+                        break;
+                    case 'East India':
+                        baseEmergency = 150;
+                        baseBed = 65;
+                        baseICU = 70;
+                        baseAmbulance = 68;
+                        baseStaff = 72;
+                        baseSupplies = 67;
+                        trendFactor = 0.05;
+                        break;
+                    case 'West India':
+                        baseEmergency = 200;
+                        baseBed = 70;
+                        baseICU = 75;
+                        baseAmbulance = 72;
+                        baseStaff = 78;
+                        baseSupplies = 72;
+                        trendFactor = 0.2;
+                        break;
+                    case 'Central India':
+                        baseEmergency = 130;
+                        baseBed = 62;
+                        baseICU = 68;
+                        baseAmbulance = 65;
+                        baseStaff = 70;
+                        baseSupplies = 65;
+                        trendFactor = 0;
+                        break;
+                    case 'Northeast India':
+                        baseEmergency = 100;
+                        baseBed = 60;
+                        baseICU = 65;
+                        baseAmbulance = 62;
+                        baseStaff = 68;
+                        baseSupplies = 60;
+                        trendFactor = 0.1;
+                        break;
+                    default:
+                        baseEmergency = 150;
+                        baseBed = 65;
+                        baseICU = 70;
+                        baseAmbulance = 68;
+                        baseStaff = 75;
+                        baseSupplies = 68;
+                        trendFactor = 0;
+                }
+                
+                // Generate data with some randomness and trends
+                const emergencyCases = [];
+                const bedUtilization = [];
+                const icuUtilization = [];
+                const ambulanceUtilization = [];
+                const staffUtilization = [];
+                const suppliesUtilization = [];
+                
+                for (let i = 0; i < 30; i++) {
+                    // Add randomness factor
+                    const dayVariation = Math.random() * 20 - 10;
+                    const percentVariation = Math.random() * 6 - 3;
+                    
+                    // Add seasonal variation (weekends might have more emergencies)
+                    const currentDate = new Date(today);
+                    currentDate.setDate(today.getDate() + i);
+                    const dayOfWeek = currentDate.getDay();
+                    const weekendFactor = (dayOfWeek === 0 || dayOfWeek === 6) ? 1.1 : 1;
+                    
+                    // Add trend over time
+                    const trendEffect = 1 + (trendFactor * (i / 30));
+                    
+                    // Calculate final values
+                    emergencyCases.push(Math.max(50, Math.round((baseEmergency * weekendFactor * trendEffect) + dayVariation)));
+                    
+                    // Utilization percentages shouldn't exceed 100%
+                    const bedValue = Math.min(99, Math.max(30, (baseBed * weekendFactor * trendEffect) + percentVariation));
+                    const icuValue = Math.min(99, Math.max(30, (baseICU * weekendFactor * trendEffect) + percentVariation));
+                    const ambulanceValue = Math.min(99, Math.max(30, (baseAmbulance * weekendFactor * trendEffect) + percentVariation));
+                    const staffValue = Math.min(99, Math.max(30, (baseStaff * weekendFactor * trendEffect) + percentVariation));
+                    const suppliesValue = Math.min(99, Math.max(30, (baseSupplies * weekendFactor * trendEffect) + percentVariation));
+                    
+                    bedUtilization.push(bedValue);
+                    icuUtilization.push(icuValue);
+                    ambulanceUtilization.push(ambulanceValue);
+                    staffUtilization.push(staffValue);
+                    suppliesUtilization.push(suppliesValue);
+                }
+                
+                // Create data structure
+                return {
+                    Emergency_Cases: {
+                        dates: dates,
+                        predictions: emergencyCases
+                    },
+                    Hospital_Bed_Utilization_Percentage: {
+                        dates: dates,
+                        predictions: bedUtilization
+                    },
+                    ICU_Utilization_Percentage: {
+                        dates: dates,
+                        predictions: icuUtilization
+                    },
+                    Ambulance_Utilization_Percentage: {
+                        dates: dates,
+                        predictions: ambulanceUtilization
+                    },
+                    Emergency_Staff_Utilization_Percentage: {
+                        dates: dates,
+                        predictions: staffUtilization
+                    },
+                    Medical_Supplies_Utilization_Percentage: {
+                        dates: dates,
+                        predictions: suppliesUtilization
+                    }
+                };
+            }
+            
+            // For demo purposes, simulate the API call
+            const originalFetch = window.fetch;
+            window.fetch = function(url, options) {
+                if (url === '/predict') {
+                    return new Promise((resolve) => {
+                        // Simulate network delay
+                        setTimeout(() => {
+                            const mockData = generateMockData();
+                            resolve({
+                                ok: true,
+                                json: () => Promise.resolve(mockData)
+                            });
+                        }, 1500); // 1.5 second delay
+                    });
+                }
+                return originalFetch(url, options);
+            };
+        });
+        
+        // Add event listeners for tooltips
+        document.querySelectorAll('.tooltip-icon').forEach(icon => {
+            icon.addEventListener('mouseenter', function() {
+                this.nextElementSibling.style.visibility = 'visible';
+                this.nextElementSibling.style.opacity = '1';
+            });
+            
+            icon.addEventListener('mouseleave', function() {
+                this.nextElementSibling.style.visibility = 'hidden';
+                this.nextElementSibling.style.opacity = '0';
+            });
+        });
+    </script>
+</body>
+</html>
