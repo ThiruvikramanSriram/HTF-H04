@@ -1,0 +1,2557 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HealthForecast - Proactive Healthcare with SDoH Analytics</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.7.0/chart.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.0.0/d3.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/topojson/3.0.2/topojson.min.js"></script>
+    <style>
+        :root {
+            --primary: #1a56db;
+            --primary-dark: #1e429f;
+            --primary-light: #3f83f8;
+            --secondary: #0f2657;
+            --accent: #38bdf8;
+            --background: #f9fafb;
+            --card-bg: #ffffff;
+            --text-primary: #1f2937;
+            --text-secondary: #6b7280;
+            --text-light: #9ca3af;
+            --danger: #ef4444;
+            --warning: #f59e0b;
+            --success: #10b981;
+            --border: #e5e7eb;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        body {
+            background-color: var(--background);
+            color: var(--text-primary);
+            min-height: 100vh;
+            display: flex;
+        }
+
+        /* Sidebar Styles */
+        .sidebar {
+            width: 260px;
+            background-color: var(--secondary);
+            color: white;
+            height: 100vh;
+            position: fixed;
+            left: 0;
+            top: 0;
+            overflow-y: auto;
+            transition: all 0.3s ease;
+            z-index: 10;
+        }
+
+        .sidebar-brand {
+            padding: 20px;
+            display: flex;
+            align-items: center;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .sidebar-brand h2 {
+            font-size: 20px;
+            margin-left: 10px;
+        }
+
+        .sidebar-menu {
+            padding-top: 20px;
+        }
+
+        .sidebar-menu li {
+            list-style: none;
+            padding: 13px 20px;
+            position: relative;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            transition: all 0.3s;
+        }
+
+        .sidebar-menu li.active {
+            background-color: var(--primary-dark);
+            border-left: 4px solid var(--accent);
+        }
+
+        .sidebar-menu li:hover {
+            background-color: rgba(255, 255, 255, 0.1);
+        }
+
+        .sidebar-menu li i {
+            margin-right: 12px;
+            width: 20px;
+            text-align: center;
+        }
+
+        /* Main Content Styles */
+        .main-content {
+            flex: 1;
+            margin-left: 260px;
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+        }
+
+        .header {
+            background-color: var(--card-bg);
+            height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 20px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            position: sticky;
+            top: 0;
+            z-index: 5;
+        }
+
+        .header-title {
+            font-size: 18px;
+            font-weight: 600;
+        }
+
+        .user-info {
+            display: flex;
+            align-items: center;
+        }
+
+        .user-info img {
+            width: 35px;
+            height: 35px;
+            border-radius: 50%;
+            margin-left: 15px;
+        }
+
+        .search-bar {
+            flex: 1;
+            max-width: 400px;
+            margin: 0 20px;
+            position: relative;
+        }
+
+        .search-bar input {
+            width: 100%;
+            padding: 8px 15px 8px 35px;
+            border-radius: 20px;
+            border: 1px solid var(--border);
+            font-size: 14px;
+        }
+
+        .search-bar i {
+            position: absolute;
+            left: 12px;
+            top: 10px;
+            color: var(--text-secondary);
+        }
+
+        /* Dashboard Content */
+        .dashboard {
+            padding: 20px;
+            flex: 1;
+        }
+
+        .dashboard-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .card {
+            background-color: var(--card-bg);
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            padding: 20px;
+        }
+
+        .stats-card {
+            position: relative;
+            overflow: hidden;
+        }
+
+        .stats-card h3 {
+            font-size: 16px;
+            color: var(--text-secondary);
+            margin-bottom: 10px;
+        }
+
+        .stats-card .number {
+            font-size: 30px;
+            font-weight: 700;
+            margin-bottom: 10px;
+        }
+
+        .stats-card .trend {
+            display: flex;
+            align-items: center;
+            font-size: 14px;
+        }
+
+        .stats-card .trend.up {
+            color: var(--success);
+        }
+
+        .stats-card .trend.down {
+            color: var(--danger);
+        }
+
+        .stats-card .trend i {
+            margin-right: 5px;
+        }
+
+        .stats-card .icon {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            width: 40px;
+            height: 40px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-color: rgba(26, 86, 219, 0.1);
+            color: var(--primary);
+        }
+
+        .data-section {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .chart-section {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        .map-container {
+            position: relative;
+            height: 500px;
+            background-color: var(--card-bg);
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+
+        .map-options {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            z-index: 2;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .map-legend {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: 4px;
+            padding: 10px;
+            z-index: 2;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 5px;
+        }
+
+        .legend-color {
+            width: 20px;
+            height: 20px;
+            margin-right: 10px;
+            border-radius: 3px;
+        }
+
+        .map-title {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            font-size: 18px;
+            font-weight: 600;
+            z-index: 2;
+        }
+
+        .map-svg {
+            width: 100%;
+            height: 100%;
+        }
+
+        .county:hover {
+            stroke: #000;
+            stroke-width: 1.5px;
+            cursor: pointer;
+        }
+
+        .tooltip {
+            position: absolute;
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 10px;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.3s;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+            max-width: 300px;
+            z-index: 100;
+        }
+
+        .tooltip h4 {
+            margin-bottom: 5px;
+            font-size: 16px;
+        }
+
+        .tooltip p {
+            margin: 4px 0;
+            font-size: 14px;
+        }
+
+        .details-panel {
+            background-color: var(--card-bg);
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            padding: 20px;
+            height: 500px;
+            overflow-y: auto;
+        }
+
+        .details-panel h3 {
+            margin-bottom: 15px;
+            font-size: 18px;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 10px;
+        }
+
+        .filter-row {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .filter-item {
+            flex: 1;
+            min-width: 200px;
+        }
+
+        .filter-item label {
+            display: block;
+            margin-bottom: 5px;
+            font-size: 14px;
+            color: var(--text-secondary);
+        }
+
+        .filter-item select, .filter-item input {
+            width: 100%;
+            padding: 8px 12px;
+            border-radius: 4px;
+            border: 1px solid var(--border);
+            background-color: white;
+            font-size: 14px;
+        }
+
+        .stat-item {
+            margin-bottom: 15px;
+        }
+
+        .stat-item h4 {
+            color: var(--text-secondary);
+            font-size: 14px;
+            margin-bottom: 5px;
+        }
+
+        .stat-item p {
+            font-size: 20px;
+            font-weight: 600;
+        }
+
+        .stat-item .risk {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 600;
+            color: white;
+        }
+
+        .risk.high {
+            background-color: var(--danger);
+        }
+
+        .risk.medium {
+            background-color: var(--warning);
+        }
+
+        .risk.low {
+            background-color: var(--success);
+        }
+
+        .timeline {
+            margin-top: 20px;
+        }
+
+        .timeline-item {
+            display: flex;
+            margin-bottom: 15px;
+        }
+
+        .timeline-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background-color: rgba(26, 86, 219, 0.1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--primary);
+            margin-right: 15px;
+            flex-shrink: 0;
+        }
+
+        .timeline-content {
+            flex: 1;
+        }
+
+        .timeline-content h4 {
+            font-size: 16px;
+            margin-bottom: 5px;
+        }
+
+        .timeline-content p {
+            color: var(--text-secondary);
+            font-size: 14px;
+        }
+
+        .timeline-content small {
+            color: var(--text-light);
+            font-size: 12px;
+        }
+
+        .intervention-list {
+            margin-top: 20px;
+        }
+
+        .intervention-item {
+            padding: 15px;
+            border-radius: 4px;
+            background-color: rgba(26, 86, 219, 0.05);
+            margin-bottom: 10px;
+            border-left: 4px solid var(--primary);
+        }
+
+        .intervention-item h4 {
+            font-size: 16px;
+            margin-bottom: 5px;
+        }
+
+        .intervention-item p {
+            color: var(--text-secondary);
+            font-size: 14px;
+            margin-bottom: 10px;
+        }
+
+        .intervention-item .meta {
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+            color: var(--text-light);
+        }
+
+        /* Chart styles */
+        .chart-container {
+            height: 300px;
+            background-color: var(--card-bg);
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            padding: 20px;
+        }
+
+        .chart-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .chart-title {
+            font-size: 16px;
+            font-weight: 600;
+        }
+
+        .chart-actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .btn {
+            padding: 6px 12px;
+            border-radius: 4px;
+            border: none;
+            background-color: var(--primary);
+            color: white;
+            font-size: 14px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+
+        .btn:hover {
+            background-color: var(--primary-dark);
+        }
+
+        .btn-outline {
+            background-color: transparent;
+            border: 1px solid var(--primary);
+            color: var(--primary);
+        }
+
+        .btn-outline:hover {
+            background-color: rgba(26, 86, 219, 0.1);
+        }
+
+        /* Added for page sections */
+        .page-section {
+            display: none;
+        }
+
+        .page-section.active {
+            display: block;
+        }
+
+        /* For forecast page */
+        .forecast-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .forecast-card {
+            background-color: var(--card-bg);
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .forecast-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 15px;
+        }
+
+        .forecast-title {
+            font-size: 18px;
+            font-weight: 600;
+        }
+
+        .forecast-date {
+            color: var(--text-secondary);
+            font-size: 14px;
+        }
+
+        .forecast-body {
+            flex: 1;
+        }
+
+        .forecast-metric {
+            margin-bottom: 10px;
+        }
+
+        .forecast-metric-title {
+            color: var(--text-secondary);
+            font-size: 14px;
+            margin-bottom: 5px;
+        }
+
+        .forecast-metric-value {
+            font-size: 24px;
+            font-weight: 600;
+        }
+
+        .forecast-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid var(--border);
+        }
+
+        .forecast-confidence {
+            font-size: 14px;
+            color: var(--text-secondary);
+        }
+
+        /* For communities page */
+        .community-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+        }
+
+        .community-card {
+            background-color: var(--card-bg);
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            padding: 20px;
+            height: 100%;
+        }
+
+        .community-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .community-icon {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background-color: rgba(26, 86, 219, 0.1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--primary);
+            margin-right: 15px;
+        }
+
+        .community-title h3 {
+            font-size: 18px;
+            margin-bottom: 5px;
+        }
+
+        .community-title p {
+            font-size: 14px;
+            color: var(--text-secondary);
+        }
+
+        .community-stats {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 15px;
+        }
+
+        .community-stat {
+            text-align: center;
+        }
+
+        .community-stat-value {
+            font-size: 20px;
+            font-weight: 600;
+        }
+
+        .community-stat-label {
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        .community-risks {
+            margin-bottom: 15px;
+        }
+
+        .community-risk-title {
+            font-size: 16px;
+            margin-bottom: 10px;
+        }
+
+        .risk-bar {
+            height: 8px;
+            border-radius: 4px;
+            margin-bottom: 10px;
+            background-color: var(--border);
+            overflow: hidden;
+        }
+
+        .risk-bar-fill {
+            height: 100%;
+            border-radius: 4px;
+        }
+
+        .risk-label {
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+        }
+
+        .community-actions {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 15px;
+        }
+
+        /* For interventions page */
+        .interventions-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+        }
+
+        .intervention-card {
+            background-color: var(--card-bg);
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            padding: 20px;
+            height: 100%;
+        }
+
+        .intervention-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 15px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .intervention-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 8px;
+            background-color: rgba(26, 86, 219, 0.1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--primary);
+        }
+
+        .intervention-status {
+            padding: 5px 10px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .status-active {
+            background-color: rgba(16, 185, 129, 0.1);
+            color: var(--success);
+        }
+
+        .status-planned {
+            background-color: rgba(59, 130, 246, 0.1);
+            color: var(--primary);
+        }
+
+        .status-completed {
+            background-color: rgba(107, 114, 128, 0.1);
+            color: var(--text-secondary);
+        }
+
+        .intervention-title {
+            font-size: 18px;
+            margin-bottom: 10px;
+        }
+
+        .intervention-description {
+            font-size: 14px;
+            color: var(--text-secondary);
+            margin-bottom: 15px;
+        }
+
+        .intervention-details {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+
+        .intervention-detail {
+            font-size: 14px;
+        }
+
+        .intervention-detail-label {
+            color: var(--text-secondary);
+            margin-bottom: 5px;
+        }
+
+        .intervention-progress {
+            margin-top: 15px;
+        }
+
+        .progress-label {
+            display: flex;
+            justify-content: space-between;
+            font-size: 14px;
+            margin-bottom: 5px;
+        }
+
+        .progress-bar {
+            height: 8px;
+            border-radius: 4px;
+            background-color: var(--border);
+            margin-bottom: 15px;
+        }
+
+        .progress-fill {
+            height: 100%;
+            border-radius: 4px;
+            background-color: var(--primary);
+        }
+
+        /* Data sources page */
+        .data-sources-container {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 20px;
+        }
+
+        .data-source-card {
+            background-color: var(--card-bg);
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            padding: 20px;
+        }
+
+        .data-source-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 15px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .data-source-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 8px;
+            background-color: rgba(26, 86, 219, 0.1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--primary);
+        }
+
+        .data-source-status {
+            padding: 5px 10px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .source-active {
+            background-color: rgba(16, 185, 129, 0.1);
+            color: var(--success);
+        }
+
+        .source-inactive {
+            background-color: rgba(239, 68, 68, 0.1);
+            color: var(--danger);
+        }
+
+        .data-source-title {
+            font-size: 18px;
+            margin-bottom: 5px;
+        }
+
+        .data-source-description {
+            font-size: 14px;
+            color: var(--text-secondary);
+            margin-bottom: 15px;
+        }
+
+        .data-metrics {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+
+        .data-metric {
+            text-align: center;
+            padding: 10px;
+            border-radius: 8px;
+            background-color: rgba(26, 86, 219, 0.05);
+        }
+
+        .data-metric-value {
+            font-size: 24px;
+            font-weight: 600;
+            margin-bottom: 5px;
+        }
+
+        .data-metric-label {
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        .data-source-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid var(--border);
+        }
+
+        .data-source-update {
+            font-size: 14px;
+            color: var(--text-secondary);
+        }
+
+        /* Settings page */
+        .settings-container {
+            display: grid;
+            grid-template-columns: 1fr 2fr;
+            gap: 20px;
+        }
+
+        .settings-sidebar {
+            background-color: var(--card-bg);
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            padding: 20px;
+        }
+
+        .settings-menu {
+            list-style: none;
+        }
+
+        .settings-menu-item {
+            padding: 12px 15px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-bottom: 5px;
+        }
+
+        .settings-menu-item:hover {
+            background-color: rgba(26, 86, 219, 0.05);
+        }
+
+        .settings-menu-item.active {
+            background-color: rgba(26, 86, 219, 0.1);
+            color: var(--primary);
+            font-weight: 600;
+        }
+
+        .settings-content {
+            background-color: var(--card-bg);
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            padding: 20px;
+        }
+
+        .settings-section {
+            margin-bottom: 30px;
+        }
+
+        .settings-section-title {
+            font-size: 18px;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .settings-form-group {
+            margin-bottom: 20px;
+        }
+
+        .settings-form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-size: 14px;
+            color: var(--text-secondary);
+        }
+
+        .settings-form-group input, .settings-form-group select, .settings-form-group textarea {
+            width: 100%;
+            padding: 10px 12px;
+            border-radius: 4px;
+            border: 1px solid var(--border);
+            font-size: 14px;
+        }
+
+        .settings-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+        }
+
+        /* Responsive adjustments */
+        @media screen and (max-width: 1024px) {
+            .data-section, .chart-section {
+                grid-template-columns: 1fr;
+            }
+            
+            .settings-container {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media screen and (max-width: 768px) {
+            .sidebar {
+                width: 70px;
+                overflow: visible;
+            }
+
+            .sidebar-brand h2, .sidebar-menu li span {
+                display: none;
+            }
+
+            .main-content {
+                margin-left: 70px;
+            }
+
+            .dashboard-cards {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Toggle for dark mode (not implemented fully) */
+        .dark-mode-toggle {
+            cursor: pointer;
+            margin-left: 15px;
+        }
+    </style>
+</head>
+<body>
+    <!-- Sidebar -->
+    <div class="sidebar">
+        <div class="sidebar-brand">
+            <i class="fas fa-heartbeat fa-lg"></i>
+            <h2>HealthForecast</h2>
+        </div>
+        <ul class="sidebar-menu">
+            <li class="active" data-page="dashboard">
+                <i class="fas fa-chart-pie"></i>
+                <span>Dashboard</span>
+            </li>
+            <li data-page="risk-maps">
+                <i class="fas fa-map-marked-alt"></i>
+                <span>Risk Maps</span>
+            </li>
+            <li data-page="forecasts">
+                <i class="fas fa-calendar-alt"></i>
+                <span>Forecasts</span>
+            </li>
+            <li data-page="communities">
+                <i class="fas fa-users"></i>
+                <span>Communities</span>
+            </li>
+            <li data-page="interventions">
+                <i class="fas fa-hand-holding-medical"></i>
+                <span>Interventions</span>
+            </li>
+            <li data-page="data-sources">
+                <i class="fas fa-database"></i>
+                <span>Data Sources</span>
+            </li>
+            <li data-page="settings">
+                <i class="fas fa-cog"></i>
+                <span>Settings</span>
+            </li>
+        </ul>
+    </div>
+
+    <!-- Main Content -->
+    <div class="main-content">
+        <div class="header">
+            <div class="header-title">
+                Healthcare Demand Forecast Dashboard
+            </div>
+            <div class="search-bar">
+                <i class="fas fa-search"></i>
+                <input type="text" placeholder="Search...">
+            </div>
+            <div class="user-info">
+                <i class="fas fa-bell"></i>
+                <div class="dark-mode-toggle">
+                    <i class="fas fa-moon"></i>
+                </div>
+                <img src="/api/placeholder/35/35" alt="User  avatar">
+            </div>
+        </div>
+
+        <div class="page-section active" id="dashboard">
+            <div class="dashboard">
+                <!-- Stats Cards -->
+                <div class="dashboard-cards">
+                    <div class="card stats-card">
+                        <div class="icon">
+                            <i class="fas fa-hospital-user"></i>
+                        </div>
+                        <h3>High-Risk Patients</h3>
+                        <div class="number">2,847</div>
+                        <div class="trend up">
+                            <i class="fas fa-arrow-up"></i>
+                            12% from last month
+                        </div>
+                    </div>
+                    <div class="card stats-card">
+                        <div class="icon">
+                            <i class="fas fa-procedures"></i>
+                        </div>
+                        <h3>Predicted Admissions</h3>
+                        <div class="number">1,432</div>
+                        <div class="trend up">
+                            <i class="fas fa-arrow-up"></i>
+                            8% from last month
+                        </div>
+                    </div>
+                    <div class="card stats-card">
+                        <div class="icon">
+                            <i class="fas fa-file-medical"></i>
+                        </div>
+                        <h3>Active Interventions</h3>
+                        <div class="number">47</div>
+                        <div class="trend down">
+                            <i class="fas fa-arrow-down"></i>
+                            5% from last month
+                        </div>
+                    </div>
+                    <div class="card stats-card">
+                        <div class="icon">
+                            <i class="fas fa-dollar-sign"></i>
+                        </div>
+                        <h3>Projected Savings</h3>
+                        <div class="number">$3.2M</div>
+                        <div class="trend down">
+                            <i class="fas fa-arrow-down"></i>
+                            3% from last month
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Map and Details -->
+                <div class="data-section">
+                    <div class="data-section">
+                        <div class="map-container">
+                            <div class="map-title">Healthcare Demand Risk Map</div>
+                            <div class="map-options">
+                                <select id="map-view">
+                                    <option value="county">County View</option>
+                                    <option value="zip">ZIP Code View</option>
+                                    <option value="state">State View</option>
+                                </select>
+                            </div>
+                            <svg class="map-svg"></svg>
+                            <div class="map-legend">
+                                <h4>Risk Level</h4>
+                                <div class="legend-item">
+                                    <div class="legend-color" style="background-color: #ef4444;"></div>
+                                    <span>High Risk (>25% increase)</span>
+                                </div>
+                                <div class="legend-item">
+                                    <div class="legend-color" style="background-color: #f59e0b;"></div>
+                                    <span>Medium Risk (10-25% increase)</span>
+                                </div>
+                                <div class="legend-item">
+                                    <div class="legend-color" style="background-color: #facc15;"></div>
+                                    <span>Low Risk (0-10% increase)</span>
+                                </div>
+                                <div class="legend-item">
+                                    <div class="legend-color" style="background-color: #10b981;"></div>
+                                    <span>Stable or Decreasing</span>
+                                </div>
+                            </div>
+                            <div class="tooltip"></div>
+                        </div>
+                    
+                        <div class="details-panel">
+                            <h3>Area Details</h3>
+                            <div id="area-details">
+                                <div class="stat-item">
+                                    <h4>Selected Region</h4>
+                                    <p>Cook County, IL</p>
+                                </div>
+                                <div class="stat-item">
+                                    <h4>Predicted ER Demand</h4>
+                                    <p>+28% <span class="risk high">High Risk</span></p>
+                                </div>
+                                <div class="stat-item">
+                                    <h4>Predicted Hospital Admissions</h4>
+                                    <p>+21% <span class="risk medium">Medium Risk</span></p>
+                                </div>
+                                <div class="stat-item">
+                                    <h4>Leading SDoH Factors</h4>
+                                    <p>Housing Instability (+32%)</p>
+                                </div>
+                                <div class="stat-item">
+                                    <h4>Population at Risk</h4>
+                                    <p>~84,000 residents</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="details-panel">
+                        <h3>County Health Details</h3>
+                        <div class="filter-row">
+                            <div class="filter-item">
+                                <label>County</label>
+                                <select id="county-select">
+                                    <option value="">Select County</option>
+                                    <option value="1">King County</option>
+                                    <option value="2">Pierce County</option>
+                                    <option value="3">Snohomish County</option>
+                                    <option value="4">Spokane County</option>
+                                    <option value="5">Clark County</option>
+                                </select>
+                            </div>
+                            <div class="filter-item">
+                                <label>Risk Type</label>
+                                <select id="detail-risk-type">
+                                    <option value="overall">Overall Health Risk</option>
+                                    <option value="chronic">Chronic Disease Risk</option>
+                                    <option value="social">Social Vulnerability</option>
+                                    <option value="access">Healthcare Access</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="stat-item">
+                            <h4>Overall Risk Score</h4>
+                            <p>78 <span class="risk high">High</span></p>
+                        </div>
+
+                        <div class="stat-item">
+                            <h4>Population</h4>
+                            <p>2,252,782</p>
+                        </div>
+
+                        <div class="stat-item">
+                            <h4>Primary Risk Factors</h4>
+                            <ul>
+                                <li>Food Access (Score: 85)</li>
+                                <li>Housing Insecurity (Score: 79)</li>
+                                <li>Transportation Access (Score: 72)</li>
+                                <li>Income Inequality (Score: 68)</li>
+                            </ul>
+                        </div>
+
+                        <div class="intervention-list">
+                            <h4>Active Interventions</h4>
+                            <div class="intervention-item">
+                                <h4>Mobile Health Clinics</h4>
+                                <p>Providing primary care services to underserved neighborhoods with limited transportation access.</p>
+                                <div class="meta">
+                                    <span>Started: Mar 15, 2025</span>
+                                    <span>Impact: 12,450 residents</span>
+                                </div>
+                            </div>
+                            <div class="intervention-item">
+                                <h4>Food Security Program</h4>
+                                <p>Partnership with local grocery stores to deliver fresh produce to food deserts.</p>
+                                <div class="meta">
+                                    <span>Started: Jan 03, 2025</span>
+                                    <span>Impact: 8,720 residents</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Charts -->
+                <div class="chart-section">
+                    <div class="chart-container">
+                        <div class="chart-header">
+                            <div class="chart-title">Health Risk Trends</div>
+                            <div class="chart-actions">
+                                <button class="btn btn-outline">Monthly</button>
+                                <button class="btn btn-outline">Quarterly</button>
+                                <button class="btn">Annual</button>
+                            </div>
+                        </div>
+                        <canvas id="risk-trend-chart"></canvas>
+                    </div>
+                    <div class="chart-container">
+                        <div class="chart-header">
+                            <div class="chart-title">Intervention Impact</div>
+                            <div class="chart-actions">
+                                <button class="btn">Export</button>
+                            </div>
+                        </div>
+                        <canvas id="impact-chart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="page-section" id="risk-maps">
+            <div class="dashboard">
+                <h2 style="margin-bottom: 20px;">Risk Maps</h2>
+                
+                <div class="filter-row">
+                    <div class="filter-item">
+                        <label>Risk Type</label>
+                        <select>
+                            <option>Overall Health Risk</option>
+                            <option>Chronic Disease Risk</option>
+                            <option>Social Vulnerability</option>
+                            <option>Healthcare Access</option>
+                            <option>Food Insecurity</option>
+                        </select>
+                    </div>
+                    <div class="filter-item">
+                        <label>Region</label>
+                        <select>
+                            <option>All Regions</option>
+                            <option>Northwest</option>
+                            <option>Northeast</option>
+                            <option>Southwest</option>
+                            <option>Southeast</option>
+                            <option>Midwest</option>
+                        </select>
+                    </div>
+                    <div class="filter-item">
+                        <label>Time Period</label>
+                        <select>
+                            <option>Current</option>
+                            <option>1 Month Forecast</option>
+                            <option>3 Month Forecast</option>
+                            <option>6 Month Forecast</option>
+                            <option>12 Month Forecast</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="map-container" style="height: 600px;">
+                    <div class="data-section">
+                        <div class="data-section">
+                            <div class="map-container">
+                                <div class="map-title">Healthcare Demand Risk Map</div>
+                                <div class="map-options">
+                                    <select id="map-view">
+                                        <option value="county">County View</option>
+                                        <option value="zip">ZIP Code View</option>
+                                        <option value="state">State View</option>
+                                    </select>
+                                </div>
+                                <svg class="map-svg"></svg>
+                                <div class="map-legend">
+                                    <h4>Risk Level</h4>
+                                    <div class="legend-item">
+                                        <div class="legend-color" style="background-color: #ef4444;"></div>
+                                        <span>High Risk (>25% increase)</span>
+                                    </div>
+                                    <div class="legend-item">
+                                        <div class="legend-color" style="background-color: #f59e0b;"></div>
+                                        <span>Medium Risk (10-25% increase)</span>
+                                    </div>
+                                    <div class="legend-item">
+                                        <div class="legend-color" style="background-color: #facc15;"></div>
+                                        <span>Low Risk (0-10% increase)</span>
+                                    </div>
+                                    <div class="legend-item">
+                                        <div class="legend-color" style="background-color: #10b981;"></div>
+                                        <span>Stable or Decreasing</span>
+                                    </div>
+                                </div>
+                                <div class="tooltip"></div>
+                            </div>
+                        
+                            <div class="details-panel">
+                                <h3>Area Details</h3>
+                                <div id="area-details">
+                                    <div class="stat-item">
+                                        <h4>Selected Region</h4>
+                                        <p>Cook County, IL</p>
+                                    </div>
+                                    <div class="stat-item">
+                                        <h4>Predicted ER Demand</h4>
+                                        <p>+28% <span class="risk high">High Risk</span></p>
+                                    </div>
+                                    <div class="stat-item">
+                                        <h4>Predicted Hospital Admissions</h4>
+                                        <p>+21% <span class="risk medium">Medium Risk</span></p>
+                                    </div>
+                                    <div class="stat-item">
+                                        <h4>Leading SDoH Factors</h4>
+                                        <p>Housing Instability (+32%)</p>
+                                    </div>
+                                    <div class="stat-item">
+                                        <h4>Population at Risk</h4>
+                                        <p>~84,000 residents</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+    
+                        <div class="details-panel">
+                            <h3>County Health Details</h3>
+                            <div class="filter-row">
+                                <div class="filter-item">
+                                    <label>County</label>
+                                    <select id="county-select">
+                                        <option value="">Select County</option>
+                                        <option value="1">King County</option>
+                                        <option value="2">Pierce County</option>
+                                        <option value="3">Snohomish County</option>
+                                        <option value="4">Spokane County</option>
+                                        <option value="5">Clark County</option>
+                                    </select>
+                                </div>
+                                <div class="filter-item">
+                                    <label>Risk Type</label>
+                                    <select id="detail-risk-type">
+                                        <option value="overall">Overall Health Risk</option>
+                                        <option value="chronic">Chronic Disease Risk</option>
+                                        <option value="social">Social Vulnerability</option>
+                                        <option value="access">Healthcare Access</option>
+                                    </select>
+                                </div>
+                            </div>
+    
+                            <div class="stat-item">
+                                <h4>Overall Risk Score</h4>
+                                <p>78 <span class="risk high">High</span></p>
+                            </div>
+    
+                            <div class="stat-item">
+                                <h4>Population</h4>
+                                <p>2,252,782</p>
+                            </div>
+    
+                            <div class="stat-item">
+                                <h4>Primary Risk Factors</h4>
+                                <ul>
+                                    <li>Food Access (Score: 85)</li>
+                                    <li>Housing Insecurity (Score: 79)</li>
+                                    <li>Transportation Access (Score: 72)</li>
+                                    <li>Income Inequality (Score: 68)</li>
+                                </ul>
+                            </div>
+    
+                            <div class="intervention-list">
+                                <h4>Active Interventions</h4>
+                                <div class="intervention-item">
+                                    <h4>Mobile Health Clinics</h4>
+                                    <p>Providing primary care services to underserved neighborhoods with limited transportation access.</p>
+                                    <div class="meta">
+                                        <span>Started: Mar 15, 2025</span>
+                                        <span>Impact: 12,450 residents</span>
+                                    </div>
+                                </div>
+                                <div class="intervention-item">
+                                    <h4>Food Security Program</h4>
+                                    <p>Partnership with local grocery stores to deliver fresh produce to food deserts.</p>
+                                    <div class="meta">
+                                        <span>Started: Jan 03, 2025</span>
+                                        <span>Impact: 8,720 residents</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="dashboard-cards" style="margin-top: 20px;">
+                    <div class="card">
+                        <h3>Regional Risk Summary</h3>
+                        <div style="height: 200px;">
+                            <canvas id="regional-risk-chart"></canvas>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <h3>Top 5 Highest Risk Counties</h3>
+                        <ul style="list-style: none; padding: 0;">
+                            <li style="padding: 10px 0; border-bottom: 1px solid #eee;">
+                                <strong>Bronx County, NY</strong> - Risk Score: 89
+                            </li>
+                            <li style="padding: 10px 0; border-bottom: 1px solid #eee;">
+                                <strong>Wayne County, MI</strong> - Risk Score: 86
+                            </li>
+                            <li style="padding: 10px 0; border-bottom: 1px solid #eee;">
+                                <strong>Fulton County, GA</strong> - Risk Score: 83
+                            </li>
+                            <li style="padding: 10px 0; border-bottom: 1px solid #eee;">
+                                <strong>Philadelphia County, PA</strong> - Risk Score: 81
+                            </li>
+                            <li style="padding: 10px 0; border-bottom: 1px solid #eee;">
+                                <strong>Milwaukee County, WI</strong> - Risk Score: 79
+                            </li>
+                        </ul>
+                    </div>
+                    <div class="card">
+                        <h3>Risk Factor Correlation</h3>
+                        <div style="height: 200px;">
+                            <canvas id="correlation-chart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="page-section" id="forecasts">
+            <div class="dashboard">
+                <h2 style="margin-bottom: 20px;">Health Forecasts</h2>
+                
+                <div class="filter-row">
+                    <div class="filter-item">
+                        <label>Forecast Type</label>
+                        <select>
+                            <option>Hospital Admissions</option>
+                            <option>Chronic Disease Incidence</option>
+                            <option>Emergency Department Visits</option>
+                            <option>Healthcare Utilization</option>
+                        </select>
+                    </div>
+                    <div class="filter-item">
+                        <label>Time Horizon</label>
+                        <select>
+                            <option>1 Month</option>
+                            <option>3 Months</option>
+                            <option>6 Months</option>
+                            <option>12 Months</option>
+                        </select>
+                    </div>
+                    <div class="filter-item">
+                        <label>Region</label>
+                        <select>
+                            <option>All Regions</option>
+                            <option>Northwest</option>
+                            <option>Northeast</option>
+                            <option>Southwest</option>
+                            <option>Southeast</option>
+                            <option>Midwest</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="chart-container" style="height: 400px; margin-bottom: 20px;">
+                    <div class="chart-header">
+                        <div class="chart-title">Hospital Admission Forecast</div>
+                        <div class="chart-actions">
+                            <button class="btn btn-outline">Monthly</button>
+                            <button class="btn btn-outline">Quarterly</button>
+                            <button class="btn">Annual</button>
+                        </div>
+                    </div>
+                    <canvas id="forecast-chart"></canvas>
+                </div>
+                
+                <div class="forecast-container">
+                    <div class="forecast-card">
+                        <div class="forecast-header">
+                            <div class="forecast-title">Diabetes Admissions</div>
+                            <div class="forecast-date">Q2 2025</div>
+                        </div>
+                        <div class="forecast-body">
+                            <div class="forecast-metric">
+                                <div class="forecast-metric-title">Predicted Admissions</div>
+                                <div class="forecast-metric-value">3,247</div>
+                            </div>
+                            <div class="forecast-metric">
+                                <div class="forecast-metric-title">% Change from Previous</div>
+                                <div class="forecast-metric-value" style="color: #ef4444;">+12.4%</div>
+                            </div>
+                        </div>
+                        <div class="forecast-footer">
+                            <div class="forecast-confidence">95% Confidence Interval</div>
+                            <button class="btn">View Details</button>
+                        </div>
+                    </div>
+                    
+                    <div class="forecast-card">
+                        <div class="forecast-header">
+                            <div class="forecast-title">Cardiovascular Disease</div>
+                            <div class="forecast-date">Q2 2025</div>
+                        </div>
+                        <div class="forecast-body">
+                            <div class="forecast-metric">
+                                <div class="forecast-metric-title">Predicted Admissions</div>
+                                <div class="forecast-metric-value">5,642</div>
+                            </div>
+                            <div class="forecast-metric">
+                                <div class="forecast-metric-title">% Change from Previous</div>
+                                <div class="forecast-metric-value" style="color: #ef4444;">+8.7%</div>
+                            </div>
+                        </div>
+                        <div class="forecast-footer">
+                            <div class="forecast-confidence">93% Confidence Interval</div>
+                            <button class="btn">View Details</button>
+                        </div>
+                    </div>
+                    
+                    <div class="forecast-card">
+                        <div class="forecast-header">
+                            <div class="forecast-title">Respiratory Conditions</div>
+                            <div class="forecast-date">Q2 2025</div>
+                        </div>
+                        <div class="forecast-body">
+                            <div class="forecast-metric">
+                                <div class="forecast-metric-title">Predicted Admissions</div>
+                                <div class="forecast-metric-value">4,198</div>
+                            </div>
+                            <div class="forecast-metric">
+                                <div class="forecast-metric-title">% Change from Previous</div>
+                                <div class="forecast-metric-value" style="color: #10b981;">-3.2%</div>
+                            </div>
+                        </div>
+                        <div class="forecast-footer">
+                            <div class="forecast-confidence">91% Confidence Interval</div>
+                            <button class="btn">View Details</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="page-section" id="communities">
+            <div class="dashboard">
+                <h2 style="margin-bottom: 20px;">Community Health Profiles</h2>
+                
+                <div class="filter-row">
+                    <div class="filter-item">
+                        <label>Community Type</label>
+                        <select>
+                            <option>All Communities</option>
+                            <option>Urban</option>
+                            <option>Suburban</option>
+                            <option>Rural</option>
+                        </select>
+                    </div>
+                    <div class="filter-item">
+                        <label>Risk Level</label>
+                        <select>
+                            <option>All Risk Levels</option>
+                            <option>High Risk</option>
+                            <option>Medium Risk</option>
+                            <option>Low Risk</option>
+                        </select>
+                    </div>
+                    <div class="filter-item">
+                        <label>Sort By</label>
+                        <select>
+                            <option>Risk Score (High to Low)</option>
+                            <option>Population (High to Low)</option>
+                            <option>Name (A-Z)</option>
+                            <option>Intervention Count</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="community-list">
+                    <div class="community-card">
+                        <div class="community-header">
+                            <div class="community-icon">
+                                <i class="fas fa-city fa-lg"></i>
+                            </div>
+                            <div class="community-title">
+                                <h3>Downtown East Side</h3>
+                                <p>Urban Center • High Risk</p>
+                            </div>
+                        </div>
+                        
+                        <div class="community-stats">
+                            <div class="community-stat">
+                                <div class="community-stat-value">127,450</div>
+                                <div class="community-stat-label">Population</div>
+                            </div>
+                            <div class="community-stat">
+                                <div class="community-stat-value">85</div>
+                                <div class="community-stat-label">Risk Score</div>
+                            </div>
+                            <div class="community-stat">
+                                <div class="community-stat-value">12</div>
+                                <div class="community-stat-label">Interventions</div>
+                            </div>
+                        </div>
+                        
+                        <div class="community-risks">
+                            <div class="community-risk-title">Primary Risk Factors</div>
+                            
+                            <div>Food Access</div>
+                            <div class="risk-bar">
+                                <div class="risk-bar-fill" style="width: 85%; background-color: #ef4444;"></div>
+                            </div>
+                            <div class="risk-label">
+                                <span>Score: 85</span>
+                                <span>High Risk</span>
+                            </div>
+                            
+                            <div>Housing Insecurity</div>
+                            <div class="risk-bar">
+                                <div class="risk-bar-fill" style="width: 78%; background-color: #ef4444;"></div>
+                            </div>
+                            <div class="risk-label">
+                                <span>Score: 78</span>
+                                <span>High Risk</span>
+                            </div>
+                            
+                            <div>Transportation Access</div>
+                            <div class="risk-bar">
+                                <div class="risk-bar-fill" style="width: 65%; background-color: #f59e0b;"></div>
+                            </div>
+                            <div class="risk-label">
+                                <span>Score: 65</span>
+                                <span>Medium Risk</span>
+                            </div>
+                        </div>
+                        
+                        <div class="community-actions">
+                            <button class="btn btn-outline">View Details</button>
+                            <button class="btn">Manage Interventions</button>
+                        </div>
+                    </div>
+                    
+                    <div class="community-card">
+                        <div class="community-header">
+                            <div class="community-icon">
+                                <i class="fas fa-home fa-lg"></i>
+                            </div>
+                            <div class="community-title">
+                                <h3>Riverside Heights</h3>
+                                <p>Suburban • Medium Risk</p>
+                            </div>
+                        </div>
+                        
+                        <div class="community-stats">
+                            <div class="community-stat">
+                                <div class="community-stat-value">86,270</div>
+                                <div class="community-stat-label">Population</div>
+                            </div>
+                            <div class="community-stat">
+                                <div class="community-stat-value">62</div>
+                                <div class="community-stat-label">Risk Score</div>
+                            </div>
+                            <div class="community-stat">
+                                <div class="community-stat-value">8</div>
+                                <div class="community-stat-label">Interventions</div>
+                            </div>
+                        </div>
+                        
+                        <div class="community-risks">
+                            <div class="community-risk-title">Primary Risk Factors</div>
+                            
+                            <div>Healthcare Access</div>
+                            <div class="risk-bar">
+                                <div class="risk-bar-fill" style="width: 72%; background-color: #f59e0b;"></div>
+                            </div>
+                            <div class="risk-label">
+                                <span>Score: 72</span>
+                                <span>Medium Risk</span>
+                            </div>
+                            
+                            <div>Chronic Disease</div>
+                            <div class="risk-bar">
+                                <div class="risk-bar-fill" style="width: 68%; background-color: #f59e0b;"></div>
+                            </div>
+                            <div class="risk-label">
+                                <span>Score: 68</span>
+                                <span>Medium Risk</span>
+                            </div>
+                            
+                            <div>Digital Divide</div>
+                            <div class="risk-bar">
+                                <div class="risk-bar-fill" style="width: 59%; background-color: #f59e0b;"></div>
+                            </div>
+                            <div class="risk-label">
+                                <span>Score: 59</span>
+                                <span>Medium Risk</span>
+                            </div>
+                        </div>
+                        
+                        <div class="community-actions">
+                            <button class="btn btn-outline">View Details</button>
+                            <button class="btn">Manage Interventions</button>
+                        </div>
+                    </div>
+                    
+                    <div class="community-card">
+                        <div class="community-header">
+                            <div class="community-icon">
+                                <i class="fas fa-tree fa-lg"></i>
+                            </div>
+                            <div class="community-title">
+                                <h3>Oakridge County</h3>
+                                <p>Rural • High Risk</p>
+                            </div>
+                        </div>
+                        
+                        <div class="community-stats">
+                            <div class="community-stat">
+                                <div class="community-stat-value">42,680</div>
+                                <div class="community-stat-label">Population</div>
+                            </div>
+                            <div class="community-stat">
+                                <div class="community-stat-value">76</div>
+                                <div class="community-stat-label">Risk Score</div>
+                            </div>
+                            <div class="community-stat">
+                                <div class="community-stat-value">5</div>
+                                <div class="community-stat-label">Interventions</div>
+                            </div>
+                        </div>
+                        
+                        <div class="community-risks">
+                            <div class="community-risk-title">Primary Risk Factors</div>
+                            
+                            <div>Healthcare Distance</div>
+                            <div class="risk-bar">
+                                <div class="risk-bar-fill" style="width: 92%; background-color: #ef4444;"></div>
+                            </div>
+                            <div class="risk-label">
+                                <span>Score: 92</span>
+                                <span>High Risk</span>
+                            </div>
+                            
+                            <div>Broadband Access</div>
+                            <div class="risk-bar">
+                                <div class="risk-bar-fill" style="width: 84%; background-color: #ef4444;"></div>
+                            </div>
+                            <div class="risk-label">
+                                <span>Score: 84</span>
+                                <span>High Risk</span>
+                            </div>
+                            
+                            <div>Provider Shortage</div>
+                            <div class="risk-bar">
+                                <div class="risk-bar-fill" style="width: 79%; background-color: #ef4444;"></div>
+                            </div>
+                            <div class="risk-label">
+                                <span>Score: 79</span>
+                                <span>High Risk</span>
+                            </div>
+                        </div>
+                        
+                        <div class="community-actions">
+                            <button class="btn btn-outline">View Details</button>
+                            <button class="btn">Manage Interventions</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="filter-row" style="margin-top: 20px;">
+                    <div class="filter-item">
+                        <label>Resource Requirement</label>
+                        <input type="text" id="resource-input" placeholder="Enter resource requirement...">
+                    </div>
+                    <div class="filter-item">
+                        <button class="btn" id="post-resource-btn">Post Resource Requirement</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="page-section" id="interventions">
+            <div class="dashboard">
+                <h2 style="margin-bottom: 20px;">Health Interventions</h2>
+                
+                <div class="filter-row">
+                    <div class="filter-item">
+                        <label>Status</label>
+                        <select>
+                            <option>All Statuses</option>
+                            <option>Active</option>
+                            <option>Planned</option>
+                            <option>Completed</option>
+                        </select>
+                    </div>
+                    <div class="filter-item">
+                        <label>Type</label>
+                        <select>
+                            <option>All Types</option>
+                            <option>Community Outreach</option>
+                            <option>Clinical Program</option>
+                            <option>Policy Initiative</option>
+                            <option>Education Campaign</option>
+                        </select>
+                    </div>
+                    <div class="filter-item">
+                        <label>Region</label>
+                        <select>
+                            <option>All Regions</option>
+                            <option>Urban</option>
+                            <option>Suburban</option>
+                            <option>Rural</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="interventions-grid">
+                    <div class="intervention-card">
+                        <div class="intervention-header">
+                            <div class="intervention-icon">
+                                <i class="fas fa-ambulance"></i>
+                            </div>
+                            <div class="intervention-status status-active">Active</div>
+                        </div>
+                        
+                        <h3 class="intervention-title">Mobile Health Clinics</h3>
+                        <p class="intervention-description">Providing primary care services to underserved neighborhoods with limited transportation access.</p>
+                        
+                        <div class="intervention-details">
+                            <div class="intervention-detail">
+                                <div class="intervention-detail-label">Start Date</div>
+                                <div>Mar 15, 2025</div>
+                            </div>
+                            <div class="intervention-detail">
+                                <div class="intervention-detail-label">End Date</div>
+                                <div>Dec 31, 2025</div>
+                            </div>
+                            <div class="intervention-detail">
+                                <div class="intervention-detail-label">Target Population</div>
+                                <div>18,500 residents</div>
+                            </div>
+                            <div class="intervention-detail">
+                                <div class="intervention-detail-label">Budget</div>
+                                <div>$845,000</div>
+                            </div>
+                        </div>
+                        
+                        <div class="intervention-progress">
+                            <div class="progress-label">
+                                <span>Current Reach</span>
+                                <span>12,450 / 18,500</span>
+                            </div>
+                            <div class="progress-bar">
+                                <div class="progress-fill" style="width: 67%;"></div>
+                            </div>
+                        </div>
+                        
+                        <div class="community-actions">
+                            <button class="btn btn-outline">View Details</button>
+                            <button class="btn">Update Status</button>
+                        </div>
+                    </div>
+                    
+                    <div class="intervention-card">
+                        <div class="intervention-header">
+                            <div class="intervention-icon">
+                                <i class="fas fa-apple-alt"></i>
+                            </div>
+                            <div class="intervention-status status-active">Active</div>
+                        </div>
+                        
+                        <h3 class="intervention-title">Food Security Program</h3>
+                        <p class="intervention-description">Partnership with local grocery stores to deliver fresh produce to food deserts.</p>
+                        
+                        <div class="intervention-details">
+                            <div class="intervention-detail">
+                                <div class="intervention-detail-label">Start Date</div>
+                                <div>Jan 03, 2025</div>
+                            </div>
+                            <div class="intervention-detail">
+                                <div class="intervention-detail-label">End Date</div>
+                                <div>Dec 31, 2025</div>
+                            </div>
+                            <div class="intervention-detail">
+                                <div class="intervention-detail-label">Target Population</div>
+                                <div>12,000 residents</div>
+                            </div>
+                            <div class="intervention-detail">
+                                <div class="intervention-detail-label">Budget</div>
+                                <div>$625,000</div>
+                            </div>
+                        </div>
+                        
+                        <div class="intervention-progress">
+                            <div class="progress-label">
+                                <span>Current Reach</span>
+                                <span>8,720 / 12,000</span>
+                            </div>
+                            <div class="progress-bar">
+                                <div class="progress-fill" style="width: 73%;"></div>
+                            </div>
+                        </div>
+                        
+                        <div class="community-actions">
+                            <button class="btn btn-outline">View Details</button>
+                            <button class="btn">Update Status</button>
+                        </div>
+                    </div>
+                    
+                    <div class="intervention-card">
+                        <div class="intervention-header">
+                            <div class="intervention-icon">
+                                <i class="fas fa-laptop-medical"></i>
+                            </div>
+                            <div class="intervention-status status-planned">Planned</div>
+                        </div>
+                        
+                        <h3 class="intervention-title">Telehealth Expansion</h3>
+                        <p class="intervention-description">Expanding telehealth services to rural areas and providing technology assistance to seniors.</p>
+                        
+                        <div class="intervention-details">
+                            <div class="intervention-detail">
+                                <div class="intervention-detail-label">Start Date</div>
+                                <div>May 01, 2025</div>
+                            </div>
+                            <div class="intervention-detail">
+                                <div class="intervention-detail-label">End Date</div>
+                                <div>Apr 30, 2026</div>
+                            </div>
+                            <div class="intervention-detail">
+                                <div class="intervention-detail-label">Target Population</div>
+                                <div>24,500 residents</div>
+                            </div>
+                            <div class="intervention-detail">
+                                <div class="intervention-detail-label">Budget</div>
+                                <div>$1,250,000</div>
+                            </div>
+                        </div>
+                        
+                        <div class="intervention-progress">
+                            <div class="progress-label">
+                                <span>Planning Progress</span>
+                                <span>65%</span>
+                            </div>
+                            <div class="progress-bar">
+                                <div class="progress-fill" style="width: 65%;"></div>
+                            </div>
+                        </div>
+                        
+                        <div class="community-actions">
+                            <button class="btn btn-outline">View Details</button>
+                            <button class="btn">Update Status</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="page-section" id="data-sources">
+            <div class="dashboard">
+                <h2 style="margin-bottom: 20px;">Data Sources</h2>
+                
+                <div class="filter-row">
+                    <div class="filter-item">
+                        <label>Status</label>
+                        <select>
+                            <option>All Statuses</option>
+                            <option>Active</option>
+                            <option>Inactive</option>
+                        </select>
+                    </div>
+                    <div class="filter-item">
+                        <label>Type</label>
+                        <select>
+                            <option>All Types</option>
+                            <option>Clinical</option>
+                            <option>Census</option>
+                            <option>Public Health</option>
+                            <option>Survey</option>
+                            <option>Environmental</option>
+                        </select>
+                    </div>
+                    <div class="filter-item">
+                        <label>Sort By</label>
+                        <select>
+                            <option>Name (A-Z)</option>
+                            <option>Last Update (Recent)</option>
+                            <option>Data Points (Most)</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="data-sources-container">
+                    <div class="data-source-card">
+                        <div class="data-source-header">
+                            <div class="data-source-icon">
+                                <i class="fas fa-hospital"></i>
+                            </div>
+                            <div class="source-active">Active</div>
+                        </div>
+                        
+                        <h3 class="data-source-title">Regional Hospital Network Data</h3>
+                        <p class="data-source-description">Aggregated, anonymized patient data from the regional hospital network including diagnoses, admissions, and outcomes.</p>
+                        
+                        <div class="data-metrics">
+                            <div class="data-metric">
+                                <div class="data-metric-value">1.2M</div>
+                                <div class="data-metric-label">Records</div>
+                            </div>
+                            <div class="data-metric">
+                                <div class="data-metric-value">Daily</div>
+                                <div class="data-metric-label">Update Frequency</div>
+                            </div>
+                            <div class="data-metric">
+                                <div class="data-metric-value">98%</div>
+                                <div class="data-metric-label">Data Quality</div>
+                            </div>
+                        </div>
+                        
+                        <div class="data-source-footer">
+                            <div class="data-source-update">Last Updated: Today</div>
+                            <button class="btn">View Details</button>
+                        </div>
+                    </div>
+                    
+                    <div class="data-source-card">
+                        <div class="data-source-header">
+                            <div class="data-source-icon">
+                                <i class="fas fa-users"></i>
+                            </div>
+                            <div class="source-active">Active</div>
+                        </div>
+                        
+                        <h3 class="data-source-title">Census & Demographic Data</h3>
+                        <p class="data-source-description">Population demographics, socioeconomic indicators, and housing data from the U.S. Census Bureau.</p>
+                        
+                        <div class="data-metrics">
+                            <div class="data-metric">
+                                <div class="data-metric-value">3,142</div>
+                                <div class="data-metric-label">Counties</div>
+                            </div>
+                            <div class="data-metric">
+                                <div class="data-metric-value">Annual</div>
+                                <div class="data-metric-label">Update Frequency</div>
+                            </div>
+                            <div class="data-metric">
+                                <div class="data-metric-value">95%</div>
+                                <div class="data-metric-label">Data Quality</div>
+                            </div>
+                        </div>
+                        
+                        <div class="data-source-footer">
+                            <div class="data-source-update">Last Updated: 01/15/2025</div>
+                            <button class="btn">View Details</button>
+                        </div>
+                    </div>
+                    
+                    <div class="data-source-card">
+                        <div class="data-source-header">
+                            <div class="data-source-icon">
+                                <i class="fas fa-cloud"></i>
+                            </div>
+                            <div class="source-active">Active</div>
+                        </div>
+                        
+                        <h3 class="data-source-title">Environmental Health Data</h3>
+                        <p class="data-source-description">Air quality, water safety, and environmental hazard data from EPA and local environmental agencies.</p>
+                        
+                        <div class="data-metrics">
+                            <div class="data-metric">
+                                <div class="data-metric-value">850K</div>
+                                <div class="data-metric-label">Records</div>
+                            </div>
+                            <div class="data-metric">
+                                <div class="data-metric-value">Weekly</div>
+                                <div class="data-metric-label">Update Frequency</div>
+                            </div>
+                            <div class="data-metric">
+                                <div class="data-metric-value">92%</div>
+                                <div class="data-metric-label">Data Quality</div>
+                            </div>
+                        </div>
+                        
+                        <div class="data-source-footer">
+                            <div class="data-source-update">Last Updated: 04/02/2025</div>
+                            <button class="btn">View Details</button>
+                        </div>
+                    </div>
+                    
+                    <div class="data-source-card">
+                        <div class="data-source-header">
+                            <div class="data-source-icon">
+                                <i class="fas fa-apple-alt"></i>
+                            </div>
+                            <div class="source-inactive">Inactive</div>
+                        </div>
+                        
+                        <h3 class="data-source-title">Food Access Survey</h3>
+                        <p class="data-source-description">Data on food deserts, grocery store access, and nutritional habits from community surveys.</p>
+                        
+                        <div class="data-metrics">
+                            <div class="data-metric">
+                                <div class="data-metric-value">45K</div>
+                                <div class="data-metric-label">Records</div>
+                            </div>
+                            <div class="data-metric">
+                                <div class="data-metric-value">Yearly</div>
+                                <div class="data-metric-label">Update Frequency</div>
+                            </div>
+                            <div class="data-metric">
+                                <div class="data-metric-value">89%</div>
+                                <div class="data-metric-label">Data Quality</div>
+                            </div>
+                        </div>
+                        
+                        <div class="data-source-footer">
+                            <div class="data-source-update">Last Updated: 08/20/2024</div>
+                            <button class="btn">View Details</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="page-section" id="settings">
+            <div class="dashboard">
+                <h2 style="margin-bottom: 20px;">Settings</h2>
+                
+                <div class="settings-container">
+                    <div class="settings-sidebar">
+                        <ul class="settings-menu">
+                            <li class="settings-menu-item active">User  Profile</li>
+                            <li class="settings-menu-item">Notifications</li>
+                            <li class="settings-menu-item">Display Options</li>
+                            <li class="settings-menu-item">Data Preferences</li>
+                            <li class="settings-menu-item">Team Management</li>
+                            <li class="settings-menu-item">API Access</li>
+                            <li class="settings-menu-item">Security</li>
+                        </ul>
+                    </div>
+                    
+                    <div class="settings-content">
+                        <div class="settings-section">
+                            <h3 class="settings-section-title">User  Profile</h3>
+                            
+                            <div class="settings-form-group">
+                                <label>Full Name</label>
+                                <input type="text" value="Dr. Sarah Johnson">
+                            </div>
+                            
+                            <div class="settings-form-group">
+                                <label>Email Address</label>
+                                <input type="email" value="sarah.johnson@healthorg.com">
+                            </div>
+                            
+                            <div class="settings-form-group">
+                                <label>Job Title</label>
+                                <input type="text" value="Director of Population Health">
+                            </div>
+                            
+                            <div class="settings-form-group">
+                                <label>Organization</label>
+                                <input type="text" value="Community Health Alliance">
+                            </div>
+                            
+                            <div class="settings-form-group">
+                                <label>Region</label>
+                                <select>
+                                    <option>Northwest</option>
+                                    <option>Northeast</option>
+                                    <option>Southwest</option>
+                                    <option>Southeast</option>
+                                    <option>Midwest</option>
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <div class="settings-section">
+                            <h3 class="settings-section-title">Change Password</h3>
+                            
+                            <div class="settings-form-group">
+                                <label>Current Password</label>
+                                <input type="password">
+                            </div>
+                            
+                            <div class="settings-form-group">
+                                <label>New Password</label>
+                                <input type="password">
+                            </div>
+                            
+                            <div class="settings-form-group">
+                                <label>Confirm New Password</label>
+                                <input type="password">
+                            </div>
+                        </div>
+                        
+                        <div class="settings-actions">
+                            <button class="btn btn-outline">Cancel</button>
+                            <button class="btn">Save Changes</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Dummy county data
+const countyData = [
+    { id: "001", name: "Cook County, IL", riskScore: 28, sdohFactors: { housing: 32, employment: 24, food: 18, education: 12, transportation: 8 }, 
+      population: 5200000, erVisitsTrend: 28, admissionsTrend: 21, coords: [41.8781, -87.6298] },
+    { id: "002", name: "Los Angeles County, CA", riskScore: 35, sdohFactors: { housing: 40, employment: 22, food: 25, education: 15, transportation: 12 }, 
+      population: 10000000, erVisitsTrend: 35, admissionsTrend: 28, coords: [34.0522, -118.2437] },
+    { id: "003", name: "Harris County, TX", riskScore: 22, sdohFactors: { housing: 25, employment: 28, food: 20, education: 10, transportation: 15 }, 
+      population: 4700000, erVisitsTrend: 22, admissionsTrend: 18, coords: [29.7604, -95.3698] },
+    { id: "004", name: "Maricopa County, AZ", riskScore: 15, sdohFactors: { housing: 18, employment: 12, food: 22, education: 8, transportation: 5 }, 
+      population: 4400000, erVisitsTrend: 15, admissionsTrend: 12, coords: [33.4484, -112.0740] },
+    { id: "005", name: "Kings County, NY", riskScore: 32, sdohFactors: { housing: 38, employment: 28, food: 20, education: 18, transportation: 6 }, 
+      population: 2600000, erVisitsTrend: 32, admissionsTrend: 25, coords: [40.6782, -73.9442] },
+    { id: "006", name: "Miami-Dade County, FL", riskScore: 24, sdohFactors: { housing: 28, employment: 22, food: 18, education: 14, transportation: 20 }, 
+      population: 2700000, erVisitsTrend: 24, admissionsTrend: 20, coords: [25.7617, -80.1918] },
+    { id: "007", name: "Dallas County, TX", riskScore: 18, sdohFactors: { housing: 22, employment: 25, food: 15, education: 8, transportation: 12 }, 
+      population: 2600000, erVisitsTrend: 18, admissionsTrend: 15, coords: [32.7767, -96.7970] },
+    { id: "008", name: "King County, WA", riskScore: 8, sdohFactors: { housing: 15, employment: 6, food: 10, education: 5, transportation: 4 }, 
+      population: 2200000, erVisitsTrend: 8, admissionsTrend: 5, coords: [47.6062, -122.3321] },
+    { id: "009", name: "Clark County, NV", riskScore: 20, sdohFactors: { housing: 24, employment: 28, food: 16, education: 10, transportation: 8 }, 
+      population: 2200000, erVisitsTrend: 20, admissionsTrend: 16, coords: [36.1699, -115.1398] },
+    { id: "010", name: "Queens County, NY", riskScore: 30, sdohFactors: { housing: 35, employment: 25, food: 22, education: 15, transportation: 8 }, 
+      population: 2300000, erVisitsTrend: 30, admissionsTrend: 24, coords: [40.7282, -73.7949] },
+];
+
+// Initialize Map
+function initializeMap() {
+    const width = document.querySelector('.map-container').offsetWidth;
+    const height = document.querySelector('.map-container').offsetHeight;
+    
+    const svg = d3.select('.map-svg')
+        .attr('width', width)
+        .attr('height', height);
+        
+    const projection = d3.geoAlbersUsa()
+        .translate([width / 2, height / 2])
+        .scale(width);
+        
+    const path = d3.geoPath().projection(projection);
+    
+    // Load US Counties TopoJSON
+    d3.json('https://cdn.jsdelivr.net/npm/us-atlas@3/counties-10m.json').then(function(us) {
+        // Extract counties from the TopoJSON
+        const counties = topojson.feature(us, us.objects.counties).features;
+        
+        // Create color scale for risk levels
+        const colorScale = d3.scaleThreshold()
+            .domain([0, 10, 25, 100])
+            .range(['#10b981', '#facc15', '#f59e0b', '#ef4444']);
+        
+        // Draw counties
+        svg.selectAll('.county')
+            .data(counties)
+            .enter()
+            .append('path')
+            .attr('class', 'county')
+            .attr('d', path)
+            .attr('fill', function(d) {
+                // Simulate county data matching (in reality would match by FIPS code)
+                const countyMatch = Math.random() * 40; // Simulate random risk scores
+                return colorScale(countyMatch);
+            })
+            .attr('stroke', '#fff')
+            .attr('stroke-width', 0.5)
+            .on('mouseover', function(event, d) {
+                // Highlight county on hover
+                d3.select(this)
+                    .attr('stroke', '#000')
+                    .attr('stroke-width', 1.5);
+                
+                // Show tooltip with county info
+                const tooltip = d3.select('.tooltip');
+                tooltip.transition()
+                    .duration(200)
+                    .style('opacity', 0.9);
+                
+                // Get random county data for demo
+                const randomCounty = countyData[Math.floor(Math.random() * countyData.length)];
+                
+                tooltip.html(`
+                    <h4>${randomCounty.name}</h4>
+                    <p><strong>Risk Score:</strong> ${randomCounty.riskScore}%</p>
+                    <p><strong>Population:</strong> ${(randomCounty.population / 1000000).toFixed(1)}M</p>
+                    <p><strong>Leading SDoH:</strong> Housing (${randomCounty.sdohFactors.housing}%)</p>
+                `)
+                    .style('left', (event.pageX + 15) + 'px')
+                    .style('top', (event.pageY - 28) + 'px');
+            })
+            .on('mouseout', function() {
+                // Remove highlight on mouseout
+                d3.select(this)
+                    .attr('stroke', '#fff')
+                    .attr('stroke-width', 0.5);
+                
+                // Hide tooltip
+                d3.select('.tooltip').transition()
+                    .duration(500)
+                    .style('opacity', 0);
+            })
+            .on('click', function(event, d) {
+                // When county is clicked, update details panel
+                const randomCounty = countyData[Math.floor(Math.random() * countyData.length)];
+                updateDetailsPanel(randomCounty);
+            });
+        
+        // Add state borders
+        svg.append('path')
+            .datum(topojson.mesh(us, us.objects.states, function(a, b) { return a !== b; }))
+            .attr('fill', 'none')
+            .attr('stroke', '#fff')
+            .attr('stroke-width', 1.5)
+            .attr('d', path);
+        
+        // Simulate initial selection
+        updateDetailsPanel(countyData[0]);
+    });
+}
+
+// Function to update details panel
+function updateDetailsPanel(county) {
+    document.querySelector('#area-details .stat-item:nth-child(1) p').textContent = county.name;
+    document.querySelector('#area-details .stat-item:nth-child(2) p').innerHTML = `+${county.erVisitsTrend}% <span class="risk high">High Risk</span>`;
+    document.querySelector('#area-details .stat-item:nth-child(3) p').innerHTML = `+${county.admissionsTrend}% <span class="risk medium">Medium Risk</span>`;
+    document.querySelector('#area-details .stat-item:nth-child(4) p').textContent = `Housing Instability (+${county.sdohFactors.housing}%)`;
+    document.querySelector('#area-details .stat-item:nth-child(5) p').textContent = `~${county.population.toLocaleString()} residents`;
+}
+
+// Call the initializeMap function when the document is ready
+document.addEventListener('DOMContentLoaded', function() {
+    initializeMap();
+});
+
+        // Basic page navigation
+        document.querySelectorAll('.sidebar-menu li').forEach(item => {
+            item.addEventListener('click', function() {
+                // Remove active class from all menu items
+                document.querySelectorAll('.sidebar-menu li').forEach(i => {
+                    i.classList.remove('active');
+                });
+                
+                // Add active class to clicked item
+                this.classList.add('active');
+                
+                // Hide all page sections
+                document.querySelectorAll('.page-section').forEach(section => {
+                    section.classList.remove('active');
+                });
+                
+                // Show selected page section
+                const pageId = this.getAttribute('data-page');
+                document.getElementById(pageId).classList.add('active');
+            });
+        });
+
+        // Initialize charts (simplified mock implementation)
+        window.addEventListener('load', function() {
+            // Risk Trend Chart
+            if(document.getElementById('risk-trend-chart')) {
+                const riskTrendChart = new Chart(
+                    document.getElementById('risk-trend-chart'),
+                    {
+                        type: 'line',
+                        data: {
+                            labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
+                            datasets: [
+                                {
+                                    label: 'Overall Risk',
+                                    data: [65, 67, 70, 75, 72, 74, 78, 76, 80, 79, 82, 85],
+                                    borderColor: '#1a56db',
+                                    backgroundColor: 'rgba(26, 86, 219, 0.1)',
+                                    tension: 0.4,
+                                    fill: true
+                                },
+                                {
+                                    label: 'SDoH Risk',
+                                    data: [72, 74, 73, 78, 76, 80, 82, 79, 83, 85, 88, 90],
+                                    borderColor: '#ef4444',
+                                    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                                    tension: 0.4,
+                                    fill: true
+                                }
+                            ]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                                legend: {
+                                    position: 'top',
+                                }
+                            },
+                            scales: {
+                                y: {
+                                    beginAtZero: false,
+                                    min: 50,
+                                    max: 100
+                                }
+                            }
+                        }
+                    }
+                );
+            }
+            
+            // Impact Chart
+            if(document.getElementById('impact-chart')) {
+                const impactChart = new Chart(
+                    document.getElementById('impact-chart'),
+                    {
+                        type: 'bar',
+                        data: {
+                            labels: ['Food Access', 'Healthcare Access', 'Transportation', 'Housing', 'Digital Divide'],
+                            datasets: [
+                                {
+                                    label: 'Before Intervention',
+                                    data: [82, 75, 68, 79, 65],
+                                    backgroundColor: '#ef4444'
+                                },
+                                {
+                                    label: 'After Intervention',
+                                    data: [68, 62, 58, 71, 55],
+                                    backgroundColor: '#10b981'
+                                }
+                            ]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                                legend: {
+                                    position: 'top',
+                                }
+                            },
+                            scales: {
+                                y: {
+                                    beginAtZero: false,
+                                    min: 50,
+                                    max: 100,
+                                    title: {
+                                        display: true,
+                                        text: 'Risk Score'
+                                    }
+                                }
+                            }
+                        }
+                    }
+                );
+            }
+            
+            // Generate a basic US map with D3 (simplified)
+            if(document.getElementById('county-map')) {
+                const width = document.getElementById('county-map').clientWidth;
+                const height = document.getElementById('county-map').clientHeight;
+                
+                const svg = d3.select("#county-map")
+                    .attr("width", width)
+                    .attr("height", height);
+                
+                // In a real implementation, this would load actual GeoJSON data
+                // This is just a placeholder rectangle to represent a map
+                svg.append("rect")
+                    .attr("x", width * 0.1)
+                    .attr("y", height * 0.1)
+                    .attr("width", width * 0.8)
+                    .attr("height", height * 0.8)
+                    .attr("fill", "#f3f4f6")
+                    .attr("stroke", "#d1d5db");
+                
+                svg.append("text")
+                    .attr("x", width / 2)
+                    .attr("y", height / 2)
+                    .attr("text-anchor", "middle")
+                    .attr("font-size", "16px")
+                    .text("Map data would load here in a real implementation");
+            }
+
+            // Post resource requirement functionality
+            document.getElementById('post-resource-btn').addEventListener('click', function() {
+                const resourceInput = document.getElementById('resource-input').value;
+                if (resourceInput) {
+                    alert(`Resource requirement posted: ${resourceInput}`);
+                    document.getElementById('resource-input').value = ''; // Clear input
+                } else {
+                    alert('Please enter a resource requirement.');
+                }
+            });
+        });
+    </script>
+</body>
+</html>
