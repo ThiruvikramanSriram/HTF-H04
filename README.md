@@ -16,6 +16,12 @@ Before opening the webpage, ensure the following Flask servers are running:
 
 This is required for the application to function correctly.
 
+### how to run
+1.save it in your local directory
+2.In your command prompt - paste the file location and click enter
+3.type the command - python app.py
+4.localhost link will appear cpy and paste it in the browser
+
 ## Features
 
 * **Dashboard**: Overview of key healthcare metrics including high-risk patients, predicted admissions, and projected savings.
