@@ -266,5 +266,52 @@ API Endpoints
 
 This application serves as a valuable tool for emergency healthcare planning and resource allocation, helping to improve healthcare service delivery and optimize resource utilization across different regions of India.
 
+# Backend logic
+
+## 📌 Overview
+This system implements a sophisticated healthcare demand forecasting solution that leverages multiple machine learning models and real-time Social Determinants of Health (SDoH) data to predict healthcare utilization across different metrics and regions.
+
+## 🎯 Purpose
+The Healthcare Demand Forecasting System is designed to help healthcare administrators, policy makers, and emergency response teams anticipate future healthcare needs more accurately. By incorporating SDoH data alongside traditional time series analysis, the system provides context-aware predictions that reflect the socioeconomic conditions influencing healthcare demand.
+
+## 📚 Intended Use
+This system is designed for **educational and research purposes**, showcasing a modern approach to healthcare forecasting. It integrates multiple ML techniques and contextual data sources but is **not intended for production deployment** without further validation.
+
+---
+
+## 🧠 Key Components
+
+### 1. 🔮 Multi-Model Ensemble Approach
+This hybrid methodology combines the strengths of multiple forecasting techniques:
+- **SARIMA** – Captures seasonality, trends, and temporal patterns
+- **XGBoost** – Models non-linear relationships with high accuracy
+- **Random Forest** – Handles categorical and continuous data interactions
+- **LSTM** – Deep learning model for complex temporal dependencies
+- **Vector Autoregression (VAR)** – Models interdependence between multiple time series
+- **Prophet** – Deals robustly with holidays, missing data, and trend shifts
+- **Hybrid Model** – Combines outputs using adaptive weighting strategies
+
+### 2. 📊 SDoH Data Integration
+Uses real-time Social Determinants of Health (SDoH) such as:
+- Unemployment rate
+- Education levels
+- Housing instability
+- Income inequality
+- Access to community resources
+
+### 3. ⚙️ Configuration System
+Fully customizable via a `config.yaml` file:
+- Model selection and parameter tuning
+- Data splitting and preprocessing settings
+- Forecast horizon control
+- Weighting strategies for ensemble models
+
+### 4. 🔧 Advanced Features
+- **Configurable Training Parameters**
+- **Adaptive Model Weighting**
+- **Time Series Cross-Validation**
+- **Forecast Anomaly Detection**
+- **Comprehensive Evaluation Metrics**
+
 
 
