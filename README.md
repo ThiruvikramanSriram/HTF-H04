@@ -209,6 +209,8 @@ Health insurance coverage
 
 Source: https://www.ahrq.gov/sdoh/data-analytics/sdoh-data.html
 
+##
+meddata.csv is the data for nlp based boolean query generator
 
 ## BACKEND
 
