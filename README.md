@@ -7,6 +7,15 @@ Medsetra is a web-based application designed to provide proactive healthcare ins
 ## overview
 At first a single page will appear and in that we have to choose management or patient and in management it has forecasting demand spikes and in patient it has nlp based boolean query generator which is on add on feature we have done for this project for commercial purpose
 
+⚠️ Important: Start Servers Before Launching Webpage
+Before opening the webpage, ensure the following Flask servers are running:
+
+🔹 boolean_query server
+
+🔹 backend server
+
+This is required for the application to function correctly.
+
 ## Features
 
 * **Dashboard**: Overview of key healthcare metrics including high-risk patients, predicted admissions, and projected savings.
