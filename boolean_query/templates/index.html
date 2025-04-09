@@ -1,0 +1,601 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Medical Search Query Generator</title>
+    <style>
+        :root {
+            --primary-color: #2c3e50;
+            --secondary-color: #3498db;
+            --accent-color: #e74c3c;
+            --success-color: #27ae60;
+            --text-color: #2c3e50;
+            --table-header: #34495e;
+            --table-stripe: #f5f6fa;
+           
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Arial', sans-serif;
+        }
+
+        body {
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            min-height: 100vh;
+        }
+
+        .nav-container {
+            background-color: var(--primary-color);
+            padding: 1rem;
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
+
+        .nav-menu {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .nav-menu a {
+            color: white;
+            text-decoration: none;
+            padding: 0.5rem 1rem;
+            transition: all 0.3s ease;
+        }
+
+        .nav-menu a:hover {
+            background-color: var(--secondary-color);
+            border-radius: 4px;
+            transform: translateY(-2px);
+        }
+
+        .hero-section {
+            background: url('https://media.istockphoto.com/id/1064279606/photo/academic.jpg?s=612x612&w=0&k=20&c=CYo748v05GCJXaytUzuIuoVZDUJNDgv1-UR50xMIDNY=') center/cover;
+            height: 400px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            margin-bottom: 2rem;
+        }
+
+        .hero-section::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.5);
+        }
+
+        .hero-content {
+            text-align: center;
+            color: white;
+            position: relative;
+            z-index: 1;
+            padding: 2rem;
+        }
+
+        .hero-content h1 {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+            animation: fadeInDown 1s ease-out;
+        }
+
+        .main-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        .search-container {
+            background: white;
+            padding: 2rem;
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            margin-bottom: 2rem;
+            animation: slideUp 1s ease-out;
+        }
+
+        form {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        label {
+            font-weight: bold;
+            color: var(--text-color);
+        }
+
+        input[type="text"] {
+            flex: 1;
+            padding: 1rem;
+            border: 2px solid #e0e0e0;
+            border-radius: 5px;
+            font-size: 1rem;
+            transition: all 0.3s ease;
+        }
+
+        input[type="text"]:focus {
+            border-color: var(--secondary-color);
+            box-shadow: 0 0 5px rgba(52,152,219,0.5);
+            outline: none;
+        }
+
+        .btn {
+            padding: 1rem 2rem;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: all 0.3s ease;
+            color: white;
+        }
+
+        .bnn{
+            padding: 1rem 2rem;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: all 0.3s ease;
+            color: white;  
+        }
+
+        .btn-primary {
+            background-color: var(--secondary-color);
+        }
+
+        .btn-success {
+            background-color: var(--success-color);
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+
+        .output-section {
+            background: white;
+            padding: 2rem;
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            margin-bottom: 2rem;
+            overflow: hidden; /* Ensures content stays within bounds */
+        }
+
+        .table-container {
+            max-width: 100%;
+            overflow-x: auto;
+            margin: 1rem 0;
+            border-radius: 8px;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
+        }
+
+        .results-table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0;
+            background: white;
+            margin: 0;
+            font-size: 0.95rem;
+        }
+
+        .results-table th {
+            background: var(--primary-color);
+            color: white;
+            padding: 1rem;
+            text-align: left;
+            font-weight: 600;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            white-space: nowrap;
+        }
+
+        .results-table th:first-child {
+            border-top-left-radius: 8px;
+        }
+
+        .results-table th:last-child {
+            border-top-right-radius: 8px;
+        }
+
+        .results-table td {
+            padding: 1rem;
+            border-bottom: 1px solid #edf2f7;
+            transition: all 0.3s ease;
+            white-space: nowrap;
+            max-width: 200px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .results-table td.expandable {
+            cursor: pointer;
+            position: relative;
+        }
+
+        .results-table td.expandable:hover {
+            white-space: normal;
+            max-width: none;
+            background-color: #f8f9fa;
+            border-radius: 4px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            z-index: 20;
+        }
+
+        .results-table tbody tr {
+            transition: all 0.3s ease;
+            background-color: white;
+        }
+
+        .results-table tbody tr:nth-child(even) {
+            background-color: #f8fafc;
+        }
+
+        .results-table tbody tr:hover {
+            background-color: #edf2f7;
+            transform: translateY(-2px);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        /* Pagination Styles */
+        .pagination {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 0.5rem;
+            margin-top: 1rem;
+        }
+
+        .pagination button {
+            padding: 0.5rem 1rem;
+            border: none;
+            background-color: var(--primary-color);
+            color: white;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .pagination button:hover {
+            background-color: var(--secondary-color);
+            transform: translateY(-2px);
+        }
+
+        .pagination span {
+            padding: 0.5rem 1rem;
+            background-color: white;
+            border-radius: 4px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        /* Loading Animation */
+        .loading-row {
+            animation: loadingPulse 1.5s infinite;
+        }
+
+        @keyframes loadingPulse {
+            0% { opacity: 0.6; }
+            50% { opacity: 0.8; }
+            100% { opacity: 0.6; }
+        }
+
+        /* Table Sorting Indicators */
+        .sort-header {
+            cursor: pointer;
+            position: relative;
+            padding-right: 1.5rem;
+        }
+
+        .sort-header::after {
+            content: '↕';
+            position: absolute;
+            right: 0.5rem;
+            opacity: 0.5;
+        }
+
+        .sort-header.sort-asc::after {
+            content: '↑';
+            opacity: 1;
+        }
+
+        .sort-header.sort-desc::after {
+            content: '↓';
+            opacity: 1;
+        }
+
+        /* Table Column Resizing */
+        .resize-handle {
+            position: absolute;
+            right: 0;
+            top: 0;
+            bottom: 0;
+            width: 4px;
+            cursor: col-resize;
+            background-color: rgba(0,0,0,0.1);
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        th:hover .resize-handle {
+            opacity: 1;
+        }
+
+        /* Empty State Styling */
+        .empty-state {
+            text-align: center;
+            padding: 2rem;
+            color: var(--text-color);
+        }
+
+        .empty-state svg {
+            width: 64px;
+            height: 64px;
+            margin-bottom: 1rem;
+            color: var(--secondary-color);
+        }
+
+        /* Table Controls */
+        .table-controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+
+        .table-search {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .table-search input {
+            padding: 0.5rem;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+
+        .column-toggle {
+            position: relative;
+        }
+
+        .column-toggle-btn {
+            padding: 0.5rem 1rem;
+            background-color: white;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .column-list {
+            position: absolute;
+            top: 100%;
+            right: 0;
+            background-color: white;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 0.5rem;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            z-index: 100;
+            display: none;
+        }
+
+        .column-list.active {
+            display: block;
+        }
+
+        .column-list label {
+            display: block;
+            padding: 0.25rem 0.5rem;
+            cursor: pointer;
+        }
+
+        /* Responsive Design */
+        @media (max-width: 768px) {
+            .table-controls {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .results-table td {
+                max-width: 150px;
+            }
+
+            .results-table th,
+            .results-table td {
+                padding: 0.75rem;
+                font-size: 0.9rem;
+            }
+        }
+
+        .chart-container {
+            width: 100%;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 2rem;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            margin-bottom: 2rem;
+        }
+
+    </style>
+</head>
+<body>
+    <nav class="nav-container">
+        <div class="nav-menu">
+            <a href="#home">Home</a>
+            <a href="https://www.nlm.nih.gov/">Library</a>
+            <a href="https://www.shiksha.com/medicine-health-sciences/colleges/mbbs-colleges-chennai">Medical College</a>
+            <a href="https://pubmed.ncbi.nlm.nih.gov/">Research</a>
+            <a href="#contact">Contact</a>
+        </div>
+    </nav>
+
+    <section class="hero-section">
+        <div class="hero-content">
+            <h1>Medical Search Query Generator</h1>
+            <p>Advanced search tools for medical professionals</p>
+        </div>
+    </section>
+
+    <main class="main-container">
+        <div class="search-container">
+            <form action="/generate_query" method="POST">
+                <label for="query">Enter your search query:</label>
+                <input type="text" id="query" name="query" placeholder="e.g., a man with headache and not a student">
+                <button type="submit" class="btn btn-primary">Generate Boolean Query</button>
+                <button type="submit" class="bnn btn-success">Upload Document</button>
+            </form>
+        </div>
+        {% if output %}
+        <div class="output-section">
+            <div class="output-header">
+                <h2>Generated Boolean Query:</h2>
+                <br>
+                <a href="http://127.0.0.1:8080/" target="_blank" class="btn btn-success related-papers">
+                    <span>Find Related Papers</span>
+                    
+                    <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                    </svg>
+                </a>
+                <br>
+                <br>
+                <br>
+            </div>
+            <div class="output-content">
+                <h2 style={color:solid balck 2px}>{{ output }}</h2>
+            </div>
+        </div>
+        {% endif %}
+ <!-- Chart Container -->
+ <div class="chart-container">
+    <h2>Data Visualization</h2>
+    <canvas id="chart"></canvas>
+</div>
+        {% if records %}
+    <div class="output-section">
+        <h2>Matching Records</h2>
+        <div class="table-controls">
+            <div class="table-search">
+                <input type="text" placeholder="Search in results..." />
+                <button class="btn btn-primary">Search</button>
+            </div>
+            <div class="column-toggle">
+                <button class="column-toggle-btn">Toggle Columns</button>
+                <div class="column-list">
+                    {% for column in records[0].keys() %}
+                    <label>
+                        <input type="checkbox" checked /> {{ column }}
+                    </label>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+        <div class="table-container">
+            <table class="results-table">
+                <thead>
+                    <tr>
+                        {% for column in records[0].keys() %}
+                        <th class="sort-header">
+                            {{ column }}
+                            <div class="resize-handle"></div>
+                        </th>
+                        {% endfor %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for record in records %}
+                    <tr>
+                        {% for value in record.values() %}
+                        <td class="expandable">{{ value }}</td>
+                        {% endfor %}
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <div class="pagination">
+            <button>Previous</button>
+            <span>Page 1 of 5</span>
+            <button>Next</button>
+        </div>
+    </div>
+    {% elif output %}
+    <div class="output-section">
+        <div class="empty-state">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+            <p>No matching records found.</p>
+        </div>
+    </div>
+    {% endif %}
+    </main>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        // Existing chart data
+        const chartData = {
+            labels: ['New York', 'Queens', 'Texas', 'London'],
+            datasets: [{
+                label: 'Cases Count',
+                data: [450, 600, 520, 750],
+                backgroundColor: 'rgba(52, 152, 219, 0.2)',
+                borderColor: 'rgba(52, 152, 219, 1)',
+                borderWidth: 1
+            }]
+        };
+
+        // Chart configuration
+        const config = {
+            type: 'bar', // Change to 'line' for a line chart, etc.
+            data: chartData,
+            options: {
+                responsive: true,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        title: {
+                            display: true,
+                            text: 'Cases Count'
+                        }
+                    },
+                    x: {
+                        title: {
+                            display: true,
+                            text: 'City'
+                        }
+                    }
+                },
+                plugins: {
+                    legend: {
+                        display: true,
+                        position: 'top'
+                    }
+                }
+            }
+        };
+
+        // Initialize the chart
+        const ctx = document.getElementById('chart').getContext('2d');
+        const myChart = new Chart(ctx, config);
+    </script>
+</body>
+
+</html>
