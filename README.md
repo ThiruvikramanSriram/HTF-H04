@@ -4,6 +4,9 @@ Medsetra is a web-based application designed to provide proactive healthcare ins
 
 ## Frontend
 
+## overview
+At first a single page will appear and in that we have to choose management or patient and in management it has forecasting demand spikes and in patient it has nlp based boolean query generator which is on add on feature we have done for this project for commercial purpose
+
 ## Features
 
 * **Dashboard**: Overview of key healthcare metrics including high-risk patients, predicted admissions, and projected savings.
@@ -192,15 +195,15 @@ Health insurance coverage
 Source: https://www.ahrq.gov/sdoh/data-analytics/sdoh-data.html
 
 
-BACKEND:
+## BACKEND
 
 backend/
 ├── app.py              # Main Flask application file
 └── templates/
     └── index.html      # Web interface template
-Overview
+## Overview
 This Flask application serves as the backend for an Emergency Healthcare Utilization Forecasting System. It processes data and generates predictions for healthcare metrics across different regions in India, with a web interface available through the index.html template.
-Purpose
+## Purpose
 The system helps healthcare administrators, policy makers, and emergency response teams plan resources efficiently by providing forecasts of critical healthcare utilization metrics. By anticipating future demand, healthcare systems can optimize staffing, bed allocation, ambulance deployment, and medical supplies management.
 Key Features
 Multi-Region Support
@@ -218,7 +221,7 @@ Ambulance Utilization
 Emergency Staff Utilization
 Medical Supplies Utilization
 
-Advanced Forecasting Methods
+## Advanced Forecasting Methods
 Employs a hybrid ensemble approach combining:
 
 SARIMA (Seasonal AutoRegressive Integrated Moving Average)
@@ -227,13 +230,13 @@ XGBoost
 VAR (Vector AutoRegression)
 LSTM (Long Short-Term Memory neural networks)
 
-Realistic Predictions
+## Realistic Predictions
 
 Incorporates realistic fluctuations to simulate real-world variability
 Adds appropriate noise levels, weekly patterns, and occasional spikes/dips based on metric type
 Ensures predictions stay within realistic bounds
 
-Web Interface
+## Web Interface
 
 User-friendly web interface (index.html)
 Selection of regions for prediction
@@ -265,6 +268,8 @@ API Endpoints
 /health - Health check endpoint to verify server status
 
 This application serves as a valuable tool for emergency healthcare planning and resource allocation, helping to improve healthcare service delivery and optimize resource utilization across different regions of India.
+
+In addition we have done nlp based Boolean query generator
 
 # Backend logic
 
