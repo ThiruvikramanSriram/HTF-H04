@@ -135,67 +135,6 @@ To evaluate the performance of these models, the following metrics are used:
 ### For VAR:
 - **AIC (Akaike Information Criterion)** and **BIC (Bayesian Information Criterion)**: For model selection and comparing different models based on their complexity.
 
-## Data
-
-## Emergency Healthcare Utilization in India Dataset
-## 📁 File Name
-Emergency_Healthcare_Utilization_India.xlsx
-
-📊 Description
-This dataset contains information related to the utilization of emergency healthcare services across different regions or time periods in India. It includes metrics such as number of visits, patient demographics, treatment types, and outcomes related to emergency medical services.
-May contain multiple sheets covering various aspects of emergency healthcare utilization.
-
-## 📚 Contents Overview
-Each sheet may contain data such as:
-
-Region/State
-
-Date/Year
-
-Number of Emergency Visits
-
-Hospital/Facility Type
-
-Reason for Visit (e.g., accidents, cardiac arrest, respiratory issues)
-
-Patient Age Groups
-
-Gender Distribution
-
-Treatment Outcome
-
-Referral Details
-
-Length of Stay
-
-## 🔍 Usage
-This dataset can be used for:
-
-Analyzing trends in emergency healthcare demand.
-
-Regional comparison of emergency service utilization.
-
-Identifying peak times for emergency cases.
-
-Studying outcomes based on facility or region.
-
-Research or academic purposes related to public health and policy.
-
-## 🧼 Data Cleaning Suggestions
-Standardize column names for analysis.
-
-Handle missing values where applicable.
-
-Convert date columns into consistent datetime format.
-
-Normalize text fields (e.g., treatment names, region names).
-
-## 📌 Source
-Source: https://data.humdata.org/dataset/world-bank-combined-indicators-for-india
-
-## Healthcare and Socioeconomic Datasets (India & USA)
-This dataset collection provides an extensive view of healthcare utilization, social determinants, and socioeconomic metadata across India and the USA. The data can be used for research, statistical analysis, and data-driven decision-making.
-
 ## 📦 Dataset Summary
 ## 1️⃣ Emergency Healthcare Utilization – India
 File: Emergency_Healthcare_Utilization_India.xlsx
@@ -251,3 +190,81 @@ Food access
 Health insurance coverage
 
 Source: https://www.ahrq.gov/sdoh/data-analytics/sdoh-data.html
+
+
+BACKEND:
+
+backend/
+├── app.py              # Main Flask application file
+└── templates/
+    └── index.html      # Web interface template
+Overview
+This Flask application serves as the backend for an Emergency Healthcare Utilization Forecasting System. It processes data and generates predictions for healthcare metrics across different regions in India, with a web interface available through the index.html template.
+Purpose
+The system helps healthcare administrators, policy makers, and emergency response teams plan resources efficiently by providing forecasts of critical healthcare utilization metrics. By anticipating future demand, healthcare systems can optimize staffing, bed allocation, ambulance deployment, and medical supplies management.
+Key Features
+Multi-Region Support
+
+Provides forecasts for different regions across India (North, South, East, West, Central, and Northeast)
+Accommodates regional variations in healthcare utilization patterns
+
+Comprehensive Metrics
+Forecasts multiple critical healthcare metrics:
+
+Emergency Cases
+Hospital Bed Utilization
+ICU Utilization
+Ambulance Utilization
+Emergency Staff Utilization
+Medical Supplies Utilization
+
+Advanced Forecasting Methods
+Employs a hybrid ensemble approach combining:
+
+SARIMA (Seasonal AutoRegressive Integrated Moving Average)
+Random Forest
+XGBoost
+VAR (Vector AutoRegression)
+LSTM (Long Short-Term Memory neural networks)
+
+Realistic Predictions
+
+Incorporates realistic fluctuations to simulate real-world variability
+Adds appropriate noise levels, weekly patterns, and occasional spikes/dips based on metric type
+Ensures predictions stay within realistic bounds
+
+Web Interface
+
+User-friendly web interface (index.html)
+Selection of regions for prediction
+Visualization of forecast results
+
+Technical Details
+
+Built with Flask framework
+Implements multiple machine learning models from scikit-learn, statsmodels, XGBoost, and TensorFlow
+Includes health check endpoint for monitoring
+Handles exceptions gracefully with informative error messages
+
+Installation and Usage
+
+Navigate to the backend directory
+Install required dependencies:
+pip install flask pandas numpy scikit-learn xgboost statsmodels tensorflow
+
+Run the application:
+python app.py
+
+Access the web interface at http://localhost:5000
+Select a region and generate predictions via the interface
+
+API Endpoints
+
+/ - Main web interface
+/predict - POST endpoint for generating predictions
+/health - Health check endpoint to verify server status
+
+This application serves as a valuable tool for emergency healthcare planning and resource allocation, helping to improve healthcare service delivery and optimize resource utilization across different regions of India.
+
+
+
